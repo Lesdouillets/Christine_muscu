@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carnet de musculation</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#e8460f">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== JOURNAL ===== -->
+  <section class="view active" id="view-journal">
+    <div class="statusbar-spacer"></div>
+    <div class="appbar"><h1>Journal</h1></div>
+    <div class="stat-row">
+      <div class="stat-tile"><span class="n" id="stat-month">0</span><span class="l">séances / mois</span></div>
+      <div class="stat-tile"><span class="n" id="stat-record">—</span><span class="l">record</span></div>
+      <div class="stat-tile"><span class="n" id="stat-total">0</span><span class="l">séances au total</span></div>
+    </div>
+    <div class="tools-row">
+      <div class="search-field">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="journal-search" placeholder="rechercher un exercice…">
+      </div>
+    </div>
+    <div class="import-cta">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <span>L'import depuis une photo WhatsApp arrivera dans une prochaine version - pour l'instant, ajoute tes séances à la main.</span>
+    </div>
+    <div class="list" id="session-list"></div>
+    <button class="export-link" id="export-btn">⭳ exporter mes séances</button>
+    <div class="bottomnav">
+      <button class="navitem sel" id="nav-journal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
+        journal
+      </button>
+      <button class="navitem" id="nav-add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        ajouter
+      </button>
+      <button class="navitem" id="nav-progress" disabled title="Pas encore construit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
+        progrès
+      </button>
+    </div>
+  </section>
+
+  <!-- ===== NOUVELLE SÉANCE (formulaire) ===== -->
+  <section class="view" id="view-new-session">
+    <div class="statusbar-spacer"></div>
+    <div class="appbar">
+      <button class="back-btn" data-go="journal"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <h2>Nouvelle séance</h2>
+    </div>
+    <div class="field">
+      <span class="field-label">Titre</span>
+      <input type="text" id="new-session-title" placeholder="ex. Séance jambes / dos" value="Séance">
+    </div>
+    <div class="field">
+      <span class="field-label">Date</span>
+      <input type="date" id="new-session-date">
+    </div>
+    <div class="field">
+      <span class="field-label">Nombre de tours</span>
+      <input type="number" id="new-session-tours" min="1" max="10" value="1">
+    </div>
+    <div class="bottom-bar">
+      <button class="primary-btn" id="create-session-btn">Créer la séance</button>
+    </div>
+  </section>
+
+  <!-- ===== ÉCRAN SÉANCE ===== -->
+  <section class="view" id="view-session">
+    <div class="statusbar-spacer"></div>
+    <div class="appbar">
+      <button class="back-btn" data-go="journal"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div>
+        <h2 id="session-title-display">Séance</h2>
+        <div class="sub" id="session-date-display"></div>
+      </div>
+    </div>
+    <div class="scroll">
+      <div class="acc-list" id="exercise-list"></div>
+      <button class="add-lib-btn" id="add-exercise-btn">+ ajouter un exercice à cette séance</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- ===== Modale : chercher / créer un exercice ===== -->
+<div class="modal-backdrop" id="exercise-modal">
+  <div class="modal">
+    <h3>Ajouter un exercice</h3>
+    <div class="field" style="margin:0;">
+      <input type="text" id="exercise-search-input" placeholder="chercher dans ta bibliothèque…">
+    </div>
+    <div id="exercise-search-results"></div>
+    <div class="field" style="margin:8px 0 0;">
+      <span class="field-label">Ou crée un nouvel exercice</span>
+      <input type="text" id="new-exercise-name" placeholder="nom de l'exercice">
+    </div>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Type</span>
+      <select id="new-exercise-type">
+        <option value="barre">Barre</option>
+        <option value="halteres">Haltères</option>
+        <option value="poids_du_corps">Poids du corps</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Répétitions cible</span>
+      <input type="number" id="new-exercise-reps" min="1" value="10">
+    </div>
+    <button class="primary-btn" id="confirm-add-exercise-btn">Ajouter à la séance</button>
+    <button class="ghost-btn" id="cancel-add-exercise-btn">Annuler</button>
+  </div>
+</div>
+
+<script src="js/db.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
