@@ -1,6 +1,15 @@
 // Service worker minimal : met en cache la coquille de l'app pour qu'elle
 // s'ouvre même sans réseau. Pas de logique IA ici (ça viendra en phase 4).
-const CACHE_NAME = "carnet-muscu-v2";
+//
+// Important : stratégie "réseau d'abord, cache en secours" (voir plus bas).
+// Avec l'ancienne stratégie "cache d'abord", une mise à jour livrée sur
+// GitHub Pages restait invisible sur un téléphone qui avait déjà installé
+// l'app tant que ce fichier sw.js lui-même ne changeait pas d'un octet -
+// exactement le bug que Christine a rencontré le 10/09/2026 (page restée
+// figée sur une très vieille version malgré plusieurs mises à jour
+// poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
+// shell sans revoir ce commentaire.
+const CACHE_NAME = "carnet-muscu-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -31,15 +40,18 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Stratégie "cache d'abord, réseau en secours" pour la coquille de l'app.
+// Stratégie "réseau d'abord, cache en secours" : avec une connexion, on
+// prend toujours la dernière version en ligne (et on rafraîchit le cache
+// au passage) ; sans connexion, on retombe sur la dernière copie connue.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return (
-        cached ||
-        fetch(event.request).catch(() => caches.match("./index.html"))
-      );
-    })
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
   );
 });
