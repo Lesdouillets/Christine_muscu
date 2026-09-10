@@ -17,7 +17,41 @@ function goTo(viewName) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.getElementById("view-" + viewName).classList.add("active");
   document.querySelectorAll(".navitem").forEach((n) => n.classList.remove("sel"));
-  if (viewName === "journal") document.getElementById("nav-journal").classList.add("sel");
+  document.querySelectorAll(`.navitem[data-nav="${viewName}"]`).forEach((n) => n.classList.add("sel"));
+}
+
+// ---------- Import de la bibliothèque publique (phase 2) ----------
+// Import unique, au premier lancement, du jeu de données accepté avec
+// Christine (hasaneyldrm/exercises-dataset, cf. spec section 7). Les ids
+// sont préfixés "ds-" pour ne jamais entrer en collision avec un exercice
+// ajouté à la main (uid() ne produit jamais ce préfixe).
+async function seedPublicLibraryIfNeeded() {
+  const count = await Db.countLibraryExercises();
+  if (count > 0) return;
+  try {
+    const res = await fetch("data/exercises-library.json");
+    if (!res.ok) return;
+    const data = await res.json();
+    const records = data.map((e) => ({
+      id: "ds-" + e.id,
+      name: e.name,
+      type: e.type,
+      bodyPart: e.bodyPart,
+      equipment: e.equipment,
+      target: e.target,
+      instructionsFr: e.instructionsFr,
+      gif: e.gif ? { kind: "link", value: e.gif } : null,
+    }));
+    await Db.bulkAddLibraryExercises(records);
+  } catch (err) {
+    // Pas de réseau au premier lancement : l'app reste utilisable, la
+    // bibliothèque publique sera importée dès qu'une connexion sera là.
+  }
+}
+
+function gifUrlOf(libEx) {
+  if (!libEx || !libEx.gif) return null;
+  return libEx.gif.value || null;
 }
 
 // ---------- Journal ----------
@@ -49,16 +83,27 @@ async function renderJournal(filterText) {
 
   for (const s of visibleSessions) {
     const exs = await Db.getExerciseSessionsForSession(s.id);
-    const card = document.createElement("button");
+    const card = document.createElement("div");
     card.className = "session-card";
     card.innerHTML = `
-      <div class="session-top">
-        <span class="session-date">${formatDateFr(s.date)}</span>
-        <span class="session-meta">${exs.length} exercice${exs.length > 1 ? "s" : ""}</span>
-      </div>
-      <div class="session-title">${escapeHtml(s.title)}</div>
+      <button class="session-card-main">
+        <div class="session-top">
+          <span class="session-date">${formatDateFr(s.date)}</span>
+          <span class="session-meta">${exs.length} exercice${exs.length > 1 ? "s" : ""}</span>
+        </div>
+        <div class="session-title">${escapeHtml(s.title)}</div>
+      </button>
+      <button class="session-delete" title="Supprimer cette séance" aria-label="Supprimer cette séance">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/></svg>
+      </button>
     `;
-    card.addEventListener("click", () => openSession(s.id));
+    card.querySelector(".session-card-main").addEventListener("click", () => openSession(s.id));
+    card.querySelector(".session-delete").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Supprimer la séance « ${s.title} » du ${formatDateFr(s.date)} ? Cette action est définitive.`)) return;
+      await Db.deleteSession(s.id);
+      await renderJournal(document.getElementById("journal-search").value);
+    });
     listEl.appendChild(card);
   }
 
@@ -71,7 +116,28 @@ async function renderJournal(filterText) {
   }).length;
   document.getElementById("stat-total").textContent = total;
   document.getElementById("stat-month").textContent = thisMonth;
-  document.getElementById("stat-record").textContent = "—"; // calcul détaillé prévu en phase "progrès"
+  document.getElementById("stat-record").textContent = await computeRecordWeightLabel(sessions);
+}
+
+// Record personnel (section 3 de la spec) : la charge totale la plus lourde
+// jamais enregistrée, tous exercices à barre/haltères confondus.
+async function computeRecordWeightLabel(sessions) {
+  let best = 0;
+  for (const s of sessions) {
+    const exs = await Db.getExerciseSessionsForSession(s.id);
+    for (const ex of exs) {
+      if (ex.type !== "barre" && ex.type !== "halteres") continue;
+      for (const round of ex.rounds || []) {
+        const w = round.weight;
+        if (!w) continue;
+        const total = ex.type === "barre" ? w.bar + w.added * 2 : w.perHand * 2;
+        if (total > best) best = total;
+      }
+    }
+  }
+  if (best === 0) return "—";
+  const rounded = Math.round(best * 10) / 10;
+  return `${rounded} kg`;
 }
 
 function escapeHtml(str) {
@@ -154,22 +220,35 @@ async function buildExerciseCard(session, ex, last) {
   const body = document.createElement("div");
   body.className = "acc-body";
 
-  // gif (placeholder tant que la bibliothèque de gifs n'est pas branchée - phase 2)
+  // gif (bibliothèque publique importée en phase 2, ou gif ajouté à la main)
+  const libEx = ex.libraryExerciseId ? await Db.getLibraryExercise(ex.libraryExerciseId) : null;
+  const gifUrl = gifUrlOf(libEx);
   const gifRow = document.createElement("div");
   gifRow.className = "gif-row";
-  gifRow.innerHTML = `
-    <div class="gif-thumb"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
-    <div class="gif-meta"><span class="t">démonstration à venir (phase 2)</span></div>
-  `;
+  if (gifUrl) {
+    gifRow.innerHTML = `
+      <div class="gif-thumb"><img src="${gifUrl}" alt="${escapeHtml(ex.name)}" loading="lazy"></div>
+      <div class="gif-meta"><span class="t">${escapeHtml(libEx.target || libEx.bodyPart || "")}</span></div>
+    `;
+  } else {
+    gifRow.innerHTML = `
+      <div class="gif-thumb"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="gif-meta"><span class="t">pas de démonstration pour cet exercice</span></div>
+    `;
+  }
   body.appendChild(gifRow);
 
-  // historique
+  // historique + suggestion (section 6 de la spec : "noté trop léger → essaie
+  // 2×15 aujourd'hui")
   if (last) {
-    const lastWeightTxt = weightLabel(ex.type, roundWeight(last, 0));
-    const lastFeeling = feelingLabel(roundFeeling(last, 0));
+    const lastRoundWeight = roundWeight(last, 0);
+    const lastRoundFeeling = roundFeeling(last, 0);
+    const lastWeightTxt = weightLabel(ex.type, lastRoundWeight);
+    const lastFeeling = feelingLabel(lastRoundFeeling);
+    const suggestion = suggestNextWeight(ex.type, lastRoundWeight, lastRoundFeeling);
     const histo = document.createElement("div");
     histo.className = "history-line";
-    histo.innerHTML = `Dernière fois - <b>${lastWeightTxt}</b>${lastFeeling ? `, noté « ${lastFeeling} »` : ""}.`;
+    histo.innerHTML = `Dernière fois - <b>${lastWeightTxt}</b>${lastFeeling ? `, noté « ${lastFeeling} »` : ""}${suggestion ? ` → <b>${suggestion}</b>` : ""}.`;
     body.appendChild(histo);
   }
 
@@ -220,6 +299,38 @@ function typeLabel(type) {
 function feelingLabel(f) {
   return { light: "trop léger", good: "bien", heavy: "trop lourd" }[f] || "";
 }
+// Suggestion simple (phase 6 du plan) : à partir du poids et du ressenti du
+// dernier passage, propose une charge pour aujourd'hui. Ne se prononce pas
+// si le dernier ressenti était "bien", ou si aucun poids n'a été noté.
+const WEIGHT_STEPS = [5, 10, 15, 20];
+function suggestNextWeight(type, weight, feeling) {
+  if (!feeling || feeling === "good") return null;
+  if (type === "barre") {
+    if (!weight) return null;
+    const idx = WEIGHT_STEPS.indexOf(weight.added);
+    if (feeling === "light") {
+      const next = idx >= 0 && idx < WEIGHT_STEPS.length - 1 ? WEIGHT_STEPS[idx + 1] : null;
+      return next ? `essaie 2×${next} aujourd'hui` : `essaie une charge libre plus lourde aujourd'hui`;
+    }
+    const prev = idx > 0 ? WEIGHT_STEPS[idx - 1] : null;
+    return prev ? `essaie 2×${prev} aujourd'hui` : `allège encore aujourd'hui`;
+  }
+  if (type === "halteres") {
+    if (!weight) return null;
+    const idx = WEIGHT_STEPS.indexOf(weight.perHand);
+    if (feeling === "light") {
+      const next = idx >= 0 && idx < WEIGHT_STEPS.length - 1 ? WEIGHT_STEPS[idx + 1] : null;
+      return next ? `essaie ${next} kg par main aujourd'hui` : `essaie une charge libre plus lourde aujourd'hui`;
+    }
+    const prev = idx > 0 ? WEIGHT_STEPS[idx - 1] : null;
+    return prev ? `essaie ${prev} kg par main aujourd'hui` : `allège encore aujourd'hui`;
+  }
+  if (type === "poids_du_corps") {
+    return feeling === "light" ? "essaie plus de répétitions aujourd'hui" : "réduis les répétitions si besoin aujourd'hui";
+  }
+  return null;
+}
+
 function roundWeight(ex, i) {
   return (ex.rounds && ex.rounds[i] && ex.rounds[i].weight) || null;
 }
@@ -394,6 +505,99 @@ function reopenCard(exerciseSessionId) {
   if (item) item.classList.add("open");
 }
 
+// ---------- Bibliothèque ----------
+
+async function renderLibrary(filterText) {
+  const gridEl = document.getElementById("library-grid");
+  const statusEl = document.getElementById("lib-status");
+  const count = await Db.countLibraryExercises();
+  if (count === 0) {
+    statusEl.textContent = "Import de la bibliothèque en cours (nécessite une connexion la première fois)…";
+  } else {
+    statusEl.textContent = "";
+  }
+
+  const results = await Db.searchLibraryExercises(filterText || "");
+  gridEl.innerHTML = "";
+
+  if (results.length === 0 && count > 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "Aucun exercice ne correspond à cette recherche.";
+    gridEl.appendChild(empty);
+    return;
+  }
+
+  for (const ex of results.slice(0, 120)) {
+    const gifUrl = gifUrlOf(ex);
+    const item = document.createElement("button");
+    item.className = "lib-item";
+    item.innerHTML = `
+      <div class="lib-item-thumb">${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}</div>
+      <div class="lib-item-name">${escapeHtml(ex.name)}</div>
+      <div class="lib-item-sub">${escapeHtml(ex.equipment || typeLabel(ex.type))}</div>
+    `;
+    item.addEventListener("click", () => openLibraryDetail(ex));
+    gridEl.appendChild(item);
+  }
+}
+
+function openLibraryDetail(ex) {
+  const gifUrl = gifUrlOf(ex);
+  document.getElementById("lib-detail-gif").innerHTML = gifUrl
+    ? `<img src="${gifUrl}" alt="${escapeHtml(ex.name)}">`
+    : `<div class="lib-detail-noGif">pas de démonstration pour cet exercice</div>`;
+  document.getElementById("lib-detail-name").textContent = ex.name;
+  document.getElementById("lib-detail-meta").textContent = [ex.equipment, ex.target, ex.bodyPart]
+    .filter(Boolean)
+    .join(" · ") || typeLabel(ex.type);
+  document.getElementById("lib-detail-instr").textContent = ex.instructionsFr || "";
+  document.getElementById("library-detail-modal").classList.add("open");
+}
+function closeLibraryDetail() {
+  document.getElementById("library-detail-modal").classList.remove("open");
+}
+
+// ---------- Ajouter un exercice à la bibliothèque (hors séance) ----------
+
+let libNewGifKind = "link";
+let libNewGifFileDataUrl = null;
+
+function openLibraryAddModal() {
+  document.getElementById("lib-new-name").value = "";
+  document.getElementById("lib-new-type").value = "barre";
+  document.getElementById("lib-new-gif-link").value = "";
+  document.getElementById("lib-new-gif-file").value = "";
+  libNewGifKind = "link";
+  libNewGifFileDataUrl = null;
+  document.querySelectorAll("#lib-new-gif-kind button").forEach((b) => b.classList.toggle("sel", b.dataset.val === "link"));
+  document.getElementById("lib-new-gif-link-field").hidden = false;
+  document.getElementById("lib-new-gif-file-field").hidden = true;
+  document.getElementById("library-add-modal").classList.add("open");
+}
+function closeLibraryAddModal() {
+  document.getElementById("library-add-modal").classList.remove("open");
+}
+
+async function confirmAddLibraryExercise() {
+  const name = document.getElementById("lib-new-name").value.trim();
+  if (!name) {
+    alert("Donne un nom à l'exercice.");
+    return;
+  }
+  const type = document.getElementById("lib-new-type").value;
+  let gif = null;
+  if (libNewGifKind === "link") {
+    const url = document.getElementById("lib-new-gif-link").value.trim();
+    if (url) gif = { kind: "link", value: url };
+  } else if (libNewGifKind === "file" && libNewGifFileDataUrl) {
+    gif = { kind: "file", value: libNewGifFileDataUrl };
+  }
+  await Db.addLibraryExercise({ name, type, gif, bodyPart: "", equipment: "", target: "", instructionsFr: "" });
+  closeLibraryAddModal();
+  await renderLibrary(document.getElementById("library-search").value);
+}
+
 // ---------- Ajouter un exercice à une séance ----------
 
 let newExerciseReps = 10;
@@ -421,9 +625,10 @@ async function searchExercisesInModal(query) {
   resultsEl.innerHTML = "";
 
   for (const r of results.slice(0, 8)) {
+    const gifUrl = gifUrlOf(r);
     const div = document.createElement("div");
-    div.className = "result-item";
-    div.textContent = `${r.name} (${typeLabel(r.type)})`;
+    div.className = "result-item result-item-withgif";
+    div.innerHTML = `${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}<span>${escapeHtml(r.name)} (${typeLabel(r.type)})</span>`;
     div.addEventListener("click", () => addExerciseToSession(r));
     resultsEl.appendChild(div);
   }
@@ -491,16 +696,33 @@ async function exportSessions() {
 
 async function init() {
   await Db.init();
+  seedPublicLibraryIfNeeded().then(() => {
+    // Une fois l'import terminé, on rafraîchit la bibliothèque si elle est
+    // affichée (premier lancement, avec connexion).
+    if (document.getElementById("view-library").classList.contains("active")) {
+      renderLibrary(document.getElementById("library-search").value);
+    }
+  });
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 
-  document.getElementById("nav-journal").addEventListener("click", async () => {
-    await renderJournal();
-    goTo("journal");
-  });
-  document.getElementById("nav-add").addEventListener("click", openNewSessionForm);
+  document.querySelectorAll('.navitem[data-nav="journal"]').forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      await renderJournal();
+      goTo("journal");
+    })
+  );
+  document.querySelectorAll('.navitem[data-nav="library"]').forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      await renderLibrary();
+      goTo("library");
+    })
+  );
+  document.querySelectorAll('.navitem[data-nav="add"]').forEach((btn) =>
+    btn.addEventListener("click", openNewSessionForm)
+  );
   document.querySelectorAll("[data-go='journal']").forEach((btn) =>
     btn.addEventListener("click", async () => {
       await renderJournal();
@@ -508,6 +730,34 @@ async function init() {
     })
   );
   document.getElementById("create-session-btn").addEventListener("click", createSession);
+  document.getElementById("delete-session-btn").addEventListener("click", async () => {
+    const session = await Db.getSession(currentSessionId);
+    if (!session) return;
+    if (!confirm(`Supprimer la séance « ${session.title} » du ${formatDateFr(session.date)} ? Cette action est définitive.`)) return;
+    await Db.deleteSession(currentSessionId);
+    await renderJournal();
+    goTo("journal");
+  });
+  document.getElementById("library-search").addEventListener("input", (e) => renderLibrary(e.target.value));
+  document.getElementById("add-library-exercise-btn").addEventListener("click", openLibraryAddModal);
+  document.getElementById("cancel-add-library-btn").addEventListener("click", closeLibraryAddModal);
+  document.getElementById("confirm-add-library-btn").addEventListener("click", confirmAddLibraryExercise);
+  document.getElementById("close-library-detail-btn").addEventListener("click", closeLibraryDetail);
+  document.querySelectorAll("#lib-new-gif-kind button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      libNewGifKind = btn.dataset.val;
+      document.querySelectorAll("#lib-new-gif-kind button").forEach((b) => b.classList.toggle("sel", b === btn));
+      document.getElementById("lib-new-gif-link-field").hidden = libNewGifKind !== "link";
+      document.getElementById("lib-new-gif-file-field").hidden = libNewGifKind !== "file";
+    });
+  });
+  document.getElementById("lib-new-gif-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) { libNewGifFileDataUrl = null; return; }
+    const reader = new FileReader();
+    reader.onload = () => { libNewGifFileDataUrl = reader.result; };
+    reader.readAsDataURL(file);
+  });
   document.getElementById("add-exercise-btn").addEventListener("click", openExerciseModal);
   document.getElementById("cancel-add-exercise-btn").addEventListener("click", closeExerciseModal);
   document.getElementById("confirm-add-exercise-btn").addEventListener("click", confirmAddExerciseFromModal);
@@ -526,6 +776,7 @@ async function init() {
   document.getElementById("export-btn").addEventListener("click", exportSessions);
 
   await renderJournal();
+  goTo("journal");
 }
 
 document.addEventListener("DOMContentLoaded", init);

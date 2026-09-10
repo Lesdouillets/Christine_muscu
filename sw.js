@@ -1,6 +1,6 @@
 // Service worker minimal : met en cache la coquille de l'app pour qu'elle
 // s'ouvre même sans réseau. Pas de logique IA ici (ça viendra en phase 4).
-const CACHE_NAME = "carnet-muscu-v1";
+const CACHE_NAME = "carnet-muscu-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,7 @@ const APP_SHELL = [
   "./css/app.css",
   "./js/db.js",
   "./js/app.js",
+  "./data/exercises-library.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
 ];

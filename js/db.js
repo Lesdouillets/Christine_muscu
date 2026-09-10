@@ -115,6 +115,19 @@ const Db = {
     });
   },
 
+  async deleteSession(sessionId) {
+    const db = this._db;
+    const exs = await this.getExerciseSessionsForSession(sessionId);
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["sessions", "exerciseSessions"], "readwrite");
+      t.objectStore("sessions").delete(sessionId);
+      const esStore = t.objectStore("exerciseSessions");
+      for (const ex of exs) esStore.delete(ex.id);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+
   async getExerciseSessionsForSession(sessionId) {
     const db = this._db;
     return new Promise((resolve, reject) => {
@@ -175,5 +188,40 @@ const Db = {
     const q = query.trim().toLowerCase();
     if (!q) return all;
     return all.filter((e) => e.name.toLowerCase().includes(q));
+  },
+
+  async getLibraryExercise(id) {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["library"], "readonly");
+      const req = t.objectStore("library").get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async countLibraryExercises() {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["library"], "readonly");
+      const req = t.objectStore("library").count();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  // Import en masse (bibliothèque publique importée une seule fois au premier
+  // lancement - section "Phase 2" du plan). Chaque enregistrement garde l'id
+  // du jeu de données comme clé, préfixé pour ne jamais entrer en collision
+  // avec un exercice créé à la main (uid() ne génère jamais ce préfixe).
+  async bulkAddLibraryExercises(records) {
+    const db = this._db;
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["library"], "readwrite");
+      const store = t.objectStore("library");
+      for (const r of records) store.put(r);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
   },
 };

@@ -34,15 +34,52 @@
     <div class="list" id="session-list"></div>
     <button class="export-link" id="export-btn">⭳ exporter mes séances</button>
     <div class="bottomnav">
-      <button class="navitem sel" id="nav-journal">
+      <button class="navitem" data-nav="journal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
         journal
       </button>
-      <button class="navitem" id="nav-add">
+      <button class="navitem" data-nav="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+        bibliothèque
+      </button>
+      <button class="navitem" data-nav="add">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         ajouter
       </button>
-      <button class="navitem" id="nav-progress" disabled title="Pas encore construit">
+      <button class="navitem" disabled title="Pas encore construit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
+        progrès
+      </button>
+    </div>
+  </section>
+
+  <!-- ===== BIBLIOTHÈQUE ===== -->
+  <section class="view" id="view-library">
+    <div class="statusbar-spacer"></div>
+    <div class="appbar"><h1>Bibliothèque</h1></div>
+    <div class="tools-row">
+      <div class="search-field">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="library-search" placeholder="rechercher un exercice…">
+      </div>
+    </div>
+    <div class="lib-status" id="lib-status"></div>
+    <div class="lib-grid" id="library-grid"></div>
+    <button class="add-lib-btn" id="add-library-exercise-btn">+ ajouter un exercice à ma bibliothèque</button>
+    <div class="bottomnav">
+      <button class="navitem" data-nav="journal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
+        journal
+      </button>
+      <button class="navitem" data-nav="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+        bibliothèque
+      </button>
+      <button class="navitem" data-nav="add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        ajouter
+      </button>
+      <button class="navitem" disabled title="Pas encore construit">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
         progrès
       </button>
@@ -86,6 +123,7 @@
     <div class="scroll">
       <div class="acc-list" id="exercise-list"></div>
       <button class="add-lib-btn" id="add-exercise-btn">+ ajouter un exercice à cette séance</button>
+      <button class="ghost-btn session-delete-btn" id="delete-session-btn">Supprimer cette séance</button>
     </div>
   </section>
 
@@ -119,6 +157,53 @@
       <button class="primary-btn" id="confirm-add-exercise-btn">Ajouter « <span id="new-exercise-name-display"></span> »</button>
     </div>
     <button class="ghost-btn" id="cancel-add-exercise-btn">Annuler</button>
+  </div>
+</div>
+
+<!-- ===== Modale : détail d'un exercice de la bibliothèque ===== -->
+<div class="modal-backdrop" id="library-detail-modal">
+  <div class="modal">
+    <div class="lib-detail-gif" id="lib-detail-gif"></div>
+    <h3 id="lib-detail-name"></h3>
+    <div class="lib-detail-meta" id="lib-detail-meta"></div>
+    <div class="lib-detail-instr" id="lib-detail-instr"></div>
+    <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
+  </div>
+</div>
+
+<!-- ===== Modale : ajouter un exercice à la bibliothèque ===== -->
+<div class="modal-backdrop" id="library-add-modal">
+  <div class="modal">
+    <h3>Nouvel exercice</h3>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Nom</span>
+      <input type="text" id="lib-new-name" placeholder="nom de l'exercice">
+    </div>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Type</span>
+      <select id="lib-new-type">
+        <option value="barre">Barre</option>
+        <option value="halteres">Haltères</option>
+        <option value="poids_du_corps">Poids du corps</option>
+        <option value="inconnu">Autre / à classer</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Gif de démonstration</span>
+      <div class="seg" id="lib-new-gif-kind">
+        <button type="button" data-val="link" class="sel">Lien</button>
+        <button type="button" data-val="file">Depuis mon téléphone</button>
+        <button type="button" data-val="none">Aucun</button>
+      </div>
+    </div>
+    <div class="field" id="lib-new-gif-link-field" style="margin:0;">
+      <input type="url" id="lib-new-gif-link" placeholder="https://…">
+    </div>
+    <div class="field" id="lib-new-gif-file-field" style="margin:0;" hidden>
+      <input type="file" id="lib-new-gif-file" accept="image/gif,image/*">
+    </div>
+    <button class="primary-btn" id="confirm-add-library-btn">Ajouter à ma bibliothèque</button>
+    <button class="ghost-btn" id="cancel-add-library-btn">Annuler</button>
   </div>
 </div>
 
