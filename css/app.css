@@ -71,9 +71,9 @@ button{font-family:inherit;}
 
 .scroll{overflow-y:auto;padding:0 16px 14px;display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;}
 
-.lib-cat-row{display:flex;gap:6px;overflow-x:auto;padding:0 16px 8px;scrollbar-width:none;}
+.lib-cat-row{display:flex;align-items:center;gap:6px;overflow-x:auto;overflow-y:hidden;min-height:34px;padding:0 16px 8px;scrollbar-width:none;}
 .lib-cat-row::-webkit-scrollbar{display:none;}
-.lib-cat-chip{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-size:.76rem;font-weight:600;padding:7px 13px;border-radius:100px;cursor:pointer;white-space:nowrap;}
+.lib-cat-chip{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);font-size:.76rem;font-weight:600;line-height:1.3;padding:7px 13px;border-radius:100px;cursor:pointer;white-space:nowrap;}
 .lib-cat-chip.sel{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
 .lib-status{padding:0 16px 6px;font-size:.78rem;color:var(--muted);}
 .lib-grid{padding:0 16px 10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;min-height:0;}

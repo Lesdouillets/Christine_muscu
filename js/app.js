@@ -528,25 +528,41 @@ function categoryOf(ex) {
   return TARGET_TO_CATEGORY[(ex.target || "").toLowerCase()] || "autres";
 }
 
-let libraryCategory = null; // null = "Tout"
+// Deuxième filtre, par matériel (à la demande de Christine, combinable avec
+// le filtre par muscle et la recherche texte).
+const EQUIPMENT_CATEGORIES = [
+  { key: "poids_du_corps", label: "Poids du corps", equipment: ["body weight", "assisted"] },
+  { key: "halteres", label: "Haltères", equipment: ["dumbbell"] },
+  { key: "barre", label: "Barre", equipment: ["barbell", "ez barbell", "olympic barbell", "trap bar"] },
+  { key: "cable", label: "Câble", equipment: ["cable"] },
+  { key: "machine", label: "Machine", equipment: ["leverage machine", "smith machine", "sled machine", "stepmill machine", "elliptical machine", "upper body ergometer", "skierg machine", "stationary bike"] },
+  { key: "elastique", label: "Élastique", equipment: ["band", "resistance band"] },
+  { key: "kettlebell", label: "Kettlebell", equipment: ["kettlebell"] },
+];
+const EQUIPMENT_TO_CATEGORY = {};
+for (const cat of EQUIPMENT_CATEGORIES) {
+  for (const e of cat.equipment) EQUIPMENT_TO_CATEGORY[e] = cat.key;
+}
+function equipmentCategoryOf(ex) {
+  return EQUIPMENT_TO_CATEGORY[(ex.equipment || "").toLowerCase()] || "autre";
+}
+
+let libraryCategory = null; // null = "Tout" (filtre par muscle)
+let libraryEquipment = null; // null = "Tout" (filtre par matériel)
 
 function renderLibraryCategoryChips() {
-  const row = document.getElementById("library-categories");
-  if (row.dataset.built) return;
-  row.dataset.built = "1";
-  const chips = [{ key: null, label: "Tout" }, ...TARGET_CATEGORIES, { key: "autres", label: "Autres" }];
-  for (const c of chips) {
-    const btn = document.createElement("button");
-    btn.className = "lib-cat-chip" + (libraryCategory === c.key ? " sel" : "");
-    btn.textContent = c.label;
-    btn.addEventListener("click", () => {
-      libraryCategory = c.key;
-      row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.remove("sel"));
-      btn.classList.add("sel");
-      renderLibrary(document.getElementById("library-search").value);
-    });
-    row.appendChild(btn);
-  }
+  buildChipRowCustom(
+    "library-categories",
+    [{ key: null, label: "Tout" }, ...TARGET_CATEGORIES, { key: "autres", label: "Autres" }],
+    () => libraryCategory,
+    (key) => { libraryCategory = key; renderLibrary(document.getElementById("library-search").value); }
+  );
+  buildChipRowCustom(
+    "library-equipment",
+    [{ key: null, label: "Tout matériel" }, ...EQUIPMENT_CATEGORIES, { key: "autre", label: "Autre" }],
+    () => libraryEquipment,
+    (key) => { libraryEquipment = key; renderLibrary(document.getElementById("library-search").value); }
+  );
 }
 
 async function renderLibrary(filterText) {
@@ -563,6 +579,9 @@ async function renderLibrary(filterText) {
   let results = await Db.searchLibraryExercises(filterText || "");
   if (libraryCategory) {
     results = results.filter((ex) => categoryOf(ex) === libraryCategory);
+  }
+  if (libraryEquipment) {
+    results = results.filter((ex) => equipmentCategoryOf(ex) === libraryEquipment);
   }
   gridEl.innerHTML = "";
 
@@ -648,16 +667,57 @@ async function confirmAddLibraryExercise() {
 
 let newExerciseReps = 10;
 let newExerciseName = "";
+let modalCategory = null;
+let modalEquipment = null;
+
+function buildModalChips() {
+  buildChipRowCustom(
+    "modal-categories",
+    [{ key: null, label: "Tout" }, ...TARGET_CATEGORIES, { key: "autres", label: "Autres" }],
+    () => modalCategory,
+    (key) => { modalCategory = key; searchExercisesInModal(document.getElementById("exercise-search-input").value); }
+  );
+  buildChipRowCustom(
+    "modal-equipment",
+    [{ key: null, label: "Tout matériel" }, ...EQUIPMENT_CATEGORIES, { key: "autre", label: "Autre" }],
+    () => modalEquipment,
+    (key) => { modalEquipment = key; searchExercisesInModal(document.getElementById("exercise-search-input").value); }
+  );
+}
+
+// Comme buildChipRow, mais l'action de sélection ne relance pas renderLibrary
+// (utilisée à la fois par la bibliothèque et par la modale d'ajout).
+function buildChipRowCustom(rowId, chips, getSelected, onSelect) {
+  const row = document.getElementById(rowId);
+  if (row.dataset.built) return;
+  row.dataset.built = "1";
+  for (const c of chips) {
+    const btn = document.createElement("button");
+    btn.className = "lib-cat-chip" + (getSelected() === c.key ? " sel" : "");
+    btn.textContent = c.label;
+    btn.addEventListener("click", () => {
+      onSelect(c.key);
+      row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.remove("sel"));
+      btn.classList.add("sel");
+    });
+    row.appendChild(btn);
+  }
+}
 
 function openExerciseModal() {
   document.getElementById("exercise-search-input").value = "";
-  document.getElementById("exercise-search-results").innerHTML = "";
   document.getElementById("new-exercise-form").hidden = true;
   newExerciseReps = 10;
   newExerciseName = "";
+  modalCategory = null;
+  modalEquipment = null;
+  buildModalChips();
+  document.getElementById("modal-categories").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
+  document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("exercise-modal").classList.add("open");
   document.getElementById("exercise-search-input").focus();
+  searchExercisesInModal("");
 }
 function closeExerciseModal() {
   document.getElementById("exercise-modal").classList.remove("open");
@@ -666,7 +726,9 @@ function closeExerciseModal() {
 async function searchExercisesInModal(query) {
   const q = query.trim();
   document.getElementById("new-exercise-form").hidden = true;
-  const results = await Db.searchLibraryExercises(q);
+  let results = await Db.searchLibraryExercises(q);
+  if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
+  if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
   const resultsEl = document.getElementById("exercise-search-results");
   resultsEl.innerHTML = "";
 
