@@ -396,11 +396,16 @@ function reopenCard(exerciseSessionId) {
 
 // ---------- Ajouter un exercice à une séance ----------
 
+let newExerciseReps = 10;
+let newExerciseName = "";
+
 function openExerciseModal() {
   document.getElementById("exercise-search-input").value = "";
   document.getElementById("exercise-search-results").innerHTML = "";
-  document.getElementById("new-exercise-name").value = "";
-  document.getElementById("new-exercise-reps").value = 10;
+  document.getElementById("new-exercise-form").hidden = true;
+  newExerciseReps = 10;
+  newExerciseName = "";
+  document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("exercise-modal").classList.add("open");
   document.getElementById("exercise-search-input").focus();
 }
@@ -409,9 +414,12 @@ function closeExerciseModal() {
 }
 
 async function searchExercisesInModal(query) {
-  const results = await Db.searchLibraryExercises(query);
+  const q = query.trim();
+  document.getElementById("new-exercise-form").hidden = true;
+  const results = await Db.searchLibraryExercises(q);
   const resultsEl = document.getElementById("exercise-search-results");
   resultsEl.innerHTML = "";
+
   for (const r of results.slice(0, 8)) {
     const div = document.createElement("div");
     div.className = "result-item";
@@ -419,6 +427,23 @@ async function searchExercisesInModal(query) {
     div.addEventListener("click", () => addExerciseToSession(r));
     resultsEl.appendChild(div);
   }
+
+  const exactMatch = results.some((r) => r.name.toLowerCase() === q.toLowerCase());
+  if (q && !exactMatch) {
+    const addNew = document.createElement("div");
+    addNew.className = "result-item result-item-new";
+    addNew.textContent = `+ ajouter « ${q} » comme nouvel exercice`;
+    addNew.addEventListener("click", () => openNewExerciseForm(q));
+    resultsEl.appendChild(addNew);
+  }
+}
+
+function openNewExerciseForm(name) {
+  newExerciseName = name;
+  newExerciseReps = 10;
+  document.getElementById("new-exercise-name-display").textContent = name;
+  document.getElementById("new-exercise-reps-value").textContent = "10";
+  document.getElementById("new-exercise-form").hidden = false;
 }
 
 async function addExerciseToSession(libraryExercise, targetReps) {
@@ -438,15 +463,10 @@ async function addExerciseToSession(libraryExercise, targetReps) {
 }
 
 async function confirmAddExerciseFromModal() {
-  const name = document.getElementById("new-exercise-name").value.trim();
-  const reps = parseInt(document.getElementById("new-exercise-reps").value, 10) || 10;
-  if (!name) {
-    alert("Donne un nom à l'exercice, ou choisis-en un dans la liste de recherche.");
-    return;
-  }
+  if (!newExerciseName) return;
   const type = document.getElementById("new-exercise-type").value;
-  const libEx = await Db.addLibraryExercise({ name, type, gif: null });
-  await addExerciseToSession(libEx, reps);
+  const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif: null });
+  await addExerciseToSession(libEx, newExerciseReps);
 }
 
 // ---------- Export ----------
@@ -494,6 +514,14 @@ async function init() {
   document.getElementById("exercise-search-input").addEventListener("input", (e) =>
     searchExercisesInModal(e.target.value)
   );
+  document.getElementById("new-exercise-reps-minus").addEventListener("click", () => {
+    newExerciseReps = Math.max(1, newExerciseReps - 1);
+    document.getElementById("new-exercise-reps-value").textContent = newExerciseReps;
+  });
+  document.getElementById("new-exercise-reps-plus").addEventListener("click", () => {
+    newExerciseReps = newExerciseReps + 1;
+    document.getElementById("new-exercise-reps-value").textContent = newExerciseReps;
+  });
   document.getElementById("journal-search").addEventListener("input", (e) => renderJournal(e.target.value));
   document.getElementById("export-btn").addEventListener("click", exportSessions);
 

@@ -96,26 +96,28 @@
   <div class="modal">
     <h3>Ajouter un exercice</h3>
     <div class="field" style="margin:0;">
-      <input type="text" id="exercise-search-input" placeholder="chercher dans ta bibliothèque…">
+      <input type="text" id="exercise-search-input" placeholder="chercher ou ajouter un exercice…">
     </div>
     <div id="exercise-search-results"></div>
-    <div class="field" style="margin:8px 0 0;">
-      <span class="field-label">Ou crée un nouvel exercice</span>
-      <input type="text" id="new-exercise-name" placeholder="nom de l'exercice">
+    <div id="new-exercise-form" hidden>
+      <div class="field" style="margin:0;">
+        <span class="field-label">Type</span>
+        <select id="new-exercise-type">
+          <option value="barre">Barre</option>
+          <option value="halteres">Haltères</option>
+          <option value="poids_du_corps">Poids du corps</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;">
+        <span class="field-label">Répétitions cible</span>
+        <div class="stepper-ctrl">
+          <button type="button" id="new-exercise-reps-minus">–</button>
+          <span class="num" id="new-exercise-reps-value">10</span>
+          <button type="button" id="new-exercise-reps-plus">+</button>
+        </div>
+      </div>
+      <button class="primary-btn" id="confirm-add-exercise-btn">Ajouter « <span id="new-exercise-name-display"></span> »</button>
     </div>
-    <div class="field" style="margin:0;">
-      <span class="field-label">Type</span>
-      <select id="new-exercise-type">
-        <option value="barre">Barre</option>
-        <option value="halteres">Haltères</option>
-        <option value="poids_du_corps">Poids du corps</option>
-      </select>
-    </div>
-    <div class="field" style="margin:0;">
-      <span class="field-label">Répétitions cible</span>
-      <input type="number" id="new-exercise-reps" min="1" value="10">
-    </div>
-    <button class="primary-btn" id="confirm-add-exercise-btn">Ajouter à la séance</button>
     <button class="ghost-btn" id="cancel-add-exercise-btn">Annuler</button>
   </div>
 </div>
