@@ -85,7 +85,7 @@ const SEARCH_SYNONYMS = {
   "dips": ["dip"],
   "haussements d'épaules": ["shrug"],
   "shrugs": ["shrug"],
-  "squat bulgare": ["bulgarian split squat"],
+  "squat bulgare": ["single leg split squat"],
   "moulinet": ["cable crossover", "cable fly"],
   "écarté couché": ["fly", "flye"],
   "écartés": ["fly", "flye"],
