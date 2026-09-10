@@ -91,15 +91,28 @@ const SEARCH_SYNONYMS = {
   "écartés": ["fly", "flye"],
 };
 
+// Retire les accents ("développé" -> "developpe") pour que la recherche
+// fonctionne même si le clavier du téléphone (ou l'autocorrection) les avale -
+// bug constaté en testant : "developpe couche" sans accent ne trouvait rien.
+function stripAccents(str) {
+  return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
 // Une requête correspond si le nom contient directement le texte tapé, ou si
 // la requête (ou le nom) correspond à une entrée du dictionnaire ci-dessus.
-function matchesSearch(name, q) {
-  if (!q) return true;
-  const n = name.toLowerCase();
+// Le dictionnaire de synonymes n'est consulté qu'à partir de 3 caractères,
+// sinon une requête très courte ("e", "a"...) matche presque toutes les clés
+// et noie la recherche sous des résultats sans rapport.
+function matchesSearch(name, rawQ) {
+  if (!rawQ) return true;
+  const n = stripAccents(name.toLowerCase());
+  const q = stripAccents(rawQ.toLowerCase());
   if (n.includes(q)) return true;
+  if (q.length < 3) return false;
   for (const key in SEARCH_SYNONYMS) {
-    if (q.includes(key) || key.includes(q)) {
-      if (SEARCH_SYNONYMS[key].some((term) => n.includes(term))) return true;
+    const k = stripAccents(key);
+    if (q.includes(k) || k.includes(q)) {
+      if (SEARCH_SYNONYMS[key].some((term) => n.includes(stripAccents(term)))) return true;
     }
   }
   return false;
@@ -635,8 +648,6 @@ async function renderLibrary(filterText) {
   const count = await Db.countLibraryExercises();
   if (count === 0) {
     statusEl.textContent = "Import de la bibliothèque en cours (nécessite une connexion la première fois)…";
-  } else {
-    statusEl.textContent = "";
   }
 
   const q = (filterText || "").trim().toLowerCase();
@@ -662,7 +673,16 @@ async function renderLibrary(filterText) {
     return;
   }
 
-  for (const ex of results.slice(0, 120)) {
+  // Pas de plafond artificiel ici : avec un plafond bas (120 avant), un
+  // exercice renommé ou une catégorie un peu grande (fessiers = 144,
+  // pectoraux = 158, abdos = 169...) disparaissait silencieusement de la
+  // grille - bug constaté en testant. La recherche/les filtres suffisent à
+  // réduire la liste ; le statut ci-dessous indique toujours combien
+  // d'exercices correspondent.
+  if (count > 0) {
+    statusEl.textContent = `${results.length} exercice${results.length > 1 ? "s" : ""}`;
+  }
+  for (const ex of results) {
     const gifUrl = gifUrlOf(ex);
     const usage = ex.usageCount || 0;
     const item = document.createElement("div");
