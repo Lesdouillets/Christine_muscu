@@ -190,6 +190,16 @@ const Db = {
     return all.filter((e) => e.name.toLowerCase().includes(q));
   },
 
+  async updateLibraryExercise(exercise) {
+    const db = this._db;
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["library"], "readwrite");
+      t.objectStore("library").put(exercise);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+
   async getLibraryExercise(id) {
     const db = this._db;
     return new Promise((resolve, reject) => {

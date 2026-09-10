@@ -549,6 +549,7 @@ function equipmentCategoryOf(ex) {
 
 let libraryCategory = null; // null = "Tout" (filtre par muscle)
 let libraryEquipment = null; // null = "Tout" (filtre par matériel)
+let libraryQuickFilter = null; // null = "Tout" | "favorites" | "used"
 
 function renderLibraryCategoryChips() {
   buildChipRowCustom(
@@ -562,6 +563,12 @@ function renderLibraryCategoryChips() {
     [{ key: null, label: "Tout matériel" }, ...EQUIPMENT_CATEGORIES, { key: "autre", label: "Autre" }],
     () => libraryEquipment,
     (key) => { libraryEquipment = key; renderLibrary(document.getElementById("library-search").value); }
+  );
+  buildChipRowCustom(
+    "library-quickfilter",
+    [{ key: null, label: "Tout" }, { key: "favorites", label: "★ Favoris" }, { key: "used", label: "Les plus utilisés" }],
+    () => libraryQuickFilter,
+    (key) => { libraryQuickFilter = key; renderLibrary(document.getElementById("library-search").value); }
   );
 }
 
@@ -583,6 +590,11 @@ async function renderLibrary(filterText) {
   if (libraryEquipment) {
     results = results.filter((ex) => equipmentCategoryOf(ex) === libraryEquipment);
   }
+  if (libraryQuickFilter === "favorites") {
+    results = results.filter((ex) => ex.favorite);
+  } else if (libraryQuickFilter === "used") {
+    results = results.filter((ex) => (ex.usageCount || 0) > 0).sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+  }
   gridEl.innerHTML = "";
 
   if (results.length === 0 && count > 0) {
@@ -595,16 +607,35 @@ async function renderLibrary(filterText) {
 
   for (const ex of results.slice(0, 120)) {
     const gifUrl = gifUrlOf(ex);
-    const item = document.createElement("button");
+    const usage = ex.usageCount || 0;
+    const item = document.createElement("div");
     item.className = "lib-item";
     item.innerHTML = `
+      <button class="lib-fav-btn${ex.favorite ? " on" : ""}" title="Marquer comme favori" aria-label="Marquer comme favori">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="${ex.favorite ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </button>
       <div class="lib-item-thumb">${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}</div>
       <div class="lib-item-name">${escapeHtml(ex.name)}</div>
-      <div class="lib-item-sub">${escapeHtml(ex.equipment || typeLabel(ex.type))}</div>
+      <div class="lib-item-sub">${escapeHtml(ex.equipment || typeLabel(ex.type))}${usage > 0 ? `<div class="lib-item-usage">utilisé ${usage}×</div>` : ""}</div>
     `;
     item.addEventListener("click", () => openLibraryDetail(ex));
+    item.querySelector(".lib-fav-btn").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      ex.favorite = !ex.favorite;
+      await Db.updateLibraryExercise(ex);
+      renderLibrary(document.getElementById("library-search").value);
+    });
     gridEl.appendChild(item);
   }
+}
+
+// Incrémente le compteur d'utilisation d'un exercice de bibliothèque - appelé
+// à chaque fois qu'il est ajouté à une séance (voir addExerciseToSession).
+async function bumpLibraryUsage(libraryExerciseId) {
+  const libEx = await Db.getLibraryExercise(libraryExerciseId);
+  if (!libEx) return;
+  libEx.usageCount = (libEx.usageCount || 0) + 1;
+  await Db.updateLibraryExercise(libEx);
 }
 
 function openLibraryDetail(ex) {
@@ -613,10 +644,39 @@ function openLibraryDetail(ex) {
     ? `<img src="${gifUrl}" alt="${escapeHtml(ex.name)}">`
     : `<div class="lib-detail-noGif">pas de démonstration pour cet exercice</div>`;
   document.getElementById("lib-detail-name").textContent = ex.name;
-  document.getElementById("lib-detail-meta").textContent = [ex.equipment, ex.target, ex.bodyPart]
+  const usage = ex.usageCount || 0;
+  document.getElementById("lib-detail-meta").textContent = [ex.equipment, ex.target, ex.bodyPart, usage > 0 ? `utilisé ${usage}×` : null]
     .filter(Boolean)
     .join(" · ") || typeLabel(ex.type);
   document.getElementById("lib-detail-instr").textContent = ex.instructionsFr || "";
+  document.getElementById("lib-detail-rename-field").hidden = true;
+  document.getElementById("lib-detail-rename-btn").onclick = () => {
+    document.getElementById("lib-detail-rename-input").value = ex.name;
+    document.getElementById("lib-detail-rename-field").hidden = false;
+    document.getElementById("lib-detail-rename-input").focus();
+  };
+  document.getElementById("lib-detail-rename-cancel").onclick = () => {
+    document.getElementById("lib-detail-rename-field").hidden = true;
+  };
+  document.getElementById("lib-detail-rename-save").onclick = async () => {
+    const newName = document.getElementById("lib-detail-rename-input").value.trim();
+    if (!newName) return;
+    ex.name = newName;
+    await Db.updateLibraryExercise(ex);
+    document.getElementById("lib-detail-name").textContent = ex.name;
+    document.getElementById("lib-detail-rename-field").hidden = true;
+    renderLibrary(document.getElementById("library-search").value);
+  };
+  const favBtn = document.getElementById("lib-detail-fav-btn");
+  favBtn.textContent = ex.favorite ? "★ Dans les favoris" : "★ Ajouter aux favoris";
+  favBtn.classList.toggle("on", !!ex.favorite);
+  favBtn.onclick = async () => {
+    ex.favorite = !ex.favorite;
+    await Db.updateLibraryExercise(ex);
+    favBtn.textContent = ex.favorite ? "★ Dans les favoris" : "★ Ajouter aux favoris";
+    favBtn.classList.toggle("on", !!ex.favorite);
+    renderLibrary(document.getElementById("library-search").value);
+  };
   document.getElementById("library-detail-modal").classList.add("open");
 }
 function closeLibraryDetail() {
@@ -771,6 +831,7 @@ async function addExerciseToSession(libraryExercise, targetReps) {
     order: existing.length,
     rounds: [],
   });
+  await bumpLibraryUsage(libraryExercise.id);
   closeExerciseModal();
   await renderExerciseList();
 }

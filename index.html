@@ -65,6 +65,7 @@
     </div>
     <div class="lib-cat-row" id="library-categories"></div>
     <div class="lib-cat-row" id="library-equipment"></div>
+    <div class="lib-cat-row" id="library-quickfilter"></div>
     <div class="lib-status" id="lib-status"></div>
     <div class="lib-grid" id="library-grid"></div>
     <button class="add-lib-btn" id="add-library-exercise-btn">+ ajouter un exercice à ma bibliothèque</button>
@@ -168,7 +169,18 @@
 <div class="modal-backdrop" id="library-detail-modal">
   <div class="modal">
     <div class="lib-detail-gif" id="lib-detail-gif"></div>
-    <h3 id="lib-detail-name"></h3>
+    <div class="lib-detail-name-row">
+      <h3 id="lib-detail-name"></h3>
+      <button class="lib-detail-rename-btn" id="lib-detail-rename-btn" title="Renommer" aria-label="Renommer">✎</button>
+    </div>
+    <div class="field" id="lib-detail-rename-field" style="margin:0;" hidden>
+      <input type="text" id="lib-detail-rename-input">
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="lib-detail-rename-save">Enregistrer</button>
+        <button class="ghost-btn" id="lib-detail-rename-cancel">Annuler</button>
+      </div>
+    </div>
+    <button class="lib-detail-fav" id="lib-detail-fav-btn">★ Ajouter aux favoris</button>
     <div class="lib-detail-meta" id="lib-detail-meta"></div>
     <div class="lib-detail-instr" id="lib-detail-instr"></div>
     <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
