@@ -49,6 +49,62 @@ async function seedPublicLibraryIfNeeded() {
   }
 }
 
+// Dictionnaire de synonymes écrit à la main (à la demande de Christine, ex.
+// "hip thrust" caché dans le jeu de données sous "barbell lying lifting (on
+// hip)"). Couvre les mouvements les plus courants, pas l'intégralité des
+// 1324 exercices - complète le renommage manuel, ne le remplace pas.
+// Clé : terme courant (français ou anglais) tel que Christine tape dans la
+// recherche. Valeur : fragments du nom anglais du jeu de données à associer.
+const SEARCH_SYNONYMS = {
+  "hip thrust": ["lying lifting (on hip)", "glute bridge", "hip thrust"],
+  "pont fessier": ["glute bridge"],
+  "développé couché": ["bench press"],
+  "développé militaire": ["overhead press", "military press", "shoulder press"],
+  "développé épaules": ["overhead press", "shoulder press"],
+  "soulevé de terre": ["deadlift"],
+  "traction": ["pull-up", "pulldown", "pull up"],
+  "tirage": ["row", "pulldown"],
+  "rowing": ["row"],
+  "presse à cuisses": ["leg press"],
+  "presse jambes": ["leg press"],
+  "extension mollets": ["calf raise"],
+  "mollets": ["calf"],
+  "élévations latérales": ["lateral raise"],
+  "élévation latérale": ["lateral raise"],
+  "curl biceps": ["biceps curl", "curl"],
+  "curl": ["curl"],
+  "extension triceps": ["triceps extension", "pushdown", "skullcrusher"],
+  "gainage": ["plank"],
+  "planche": ["plank"],
+  "fentes": ["lunge"],
+  "fente": ["lunge"],
+  "pompes": ["push-up", "press up"],
+  "pompe": ["push-up", "press up"],
+  "abdos": ["sit-up", "crunch"],
+  "crunch": ["crunch"],
+  "dips": ["dip"],
+  "haussements d'épaules": ["shrug"],
+  "shrugs": ["shrug"],
+  "squat bulgare": ["bulgarian split squat"],
+  "moulinet": ["cable crossover", "cable fly"],
+  "écarté couché": ["fly", "flye"],
+  "écartés": ["fly", "flye"],
+};
+
+// Une requête correspond si le nom contient directement le texte tapé, ou si
+// la requête (ou le nom) correspond à une entrée du dictionnaire ci-dessus.
+function matchesSearch(name, q) {
+  if (!q) return true;
+  const n = name.toLowerCase();
+  if (n.includes(q)) return true;
+  for (const key in SEARCH_SYNONYMS) {
+    if (q.includes(key) || key.includes(q)) {
+      if (SEARCH_SYNONYMS[key].some((term) => n.includes(term))) return true;
+    }
+  }
+  return false;
+}
+
 function gifUrlOf(libEx) {
   if (!libEx || !libEx.gif) return null;
   return libEx.gif.value || null;
@@ -583,7 +639,8 @@ async function renderLibrary(filterText) {
     statusEl.textContent = "";
   }
 
-  let results = await Db.searchLibraryExercises(filterText || "");
+  const q = (filterText || "").trim().toLowerCase();
+  let results = (await Db.getAllLibraryExercises()).filter((ex) => matchesSearch(ex.name, q));
   if (libraryCategory) {
     results = results.filter((ex) => categoryOf(ex) === libraryCategory);
   }
@@ -612,7 +669,7 @@ async function renderLibrary(filterText) {
     item.className = "lib-item";
     item.innerHTML = `
       <button class="lib-fav-btn${ex.favorite ? " on" : ""}" title="Marquer comme favori" aria-label="Marquer comme favori">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="${ex.favorite ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="${ex.favorite ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
       </button>
       <div class="lib-item-thumb">${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}</div>
       <div class="lib-item-name">${escapeHtml(ex.name)}</div>
@@ -784,9 +841,10 @@ function closeExerciseModal() {
 }
 
 async function searchExercisesInModal(query) {
-  const q = query.trim();
+  const rawQuery = query.trim();
+  const q = rawQuery.toLowerCase();
   document.getElementById("new-exercise-form").hidden = true;
-  let results = await Db.searchLibraryExercises(q);
+  let results = (await Db.getAllLibraryExercises()).filter((ex) => matchesSearch(ex.name, q));
   if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
   if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
   const resultsEl = document.getElementById("exercise-search-results");
@@ -801,12 +859,12 @@ async function searchExercisesInModal(query) {
     resultsEl.appendChild(div);
   }
 
-  const exactMatch = results.some((r) => r.name.toLowerCase() === q.toLowerCase());
-  if (q && !exactMatch) {
+  const exactMatch = results.some((r) => r.name.toLowerCase() === q);
+  if (rawQuery && !exactMatch) {
     const addNew = document.createElement("div");
     addNew.className = "result-item result-item-new";
-    addNew.textContent = `+ ajouter « ${q} » comme nouvel exercice`;
-    addNew.addEventListener("click", () => openNewExerciseForm(q));
+    addNew.textContent = `+ ajouter « ${rawQuery} » comme nouvel exercice`;
+    addNew.addEventListener("click", () => openNewExerciseForm(rawQuery));
     resultsEl.appendChild(addNew);
   }
 }
@@ -943,6 +1001,13 @@ async function init() {
   });
   document.getElementById("journal-search").addEventListener("input", (e) => renderJournal(e.target.value));
   document.getElementById("export-btn").addEventListener("click", exportSessions);
+  // Ferme n'importe quelle fenêtre (gif, ajout d'exercice...) si on touche
+  // à côté, en dehors de son contenu.
+  document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
+    backdrop.addEventListener("click", (e) => {
+      if (e.target === backdrop) backdrop.classList.remove("open");
+    });
+  });
 
   await renderJournal();
   goTo("journal");

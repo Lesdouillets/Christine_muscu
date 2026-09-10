@@ -78,8 +78,8 @@ button{font-family:inherit;}
 .lib-status{padding:0 16px 6px;font-size:.78rem;color:var(--muted);}
 .lib-grid{padding:0 16px 10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1;min-height:0;}
 .lib-item{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:9px 38px 9px 12px;display:flex;align-items:center;gap:11px;cursor:pointer;text-align:left;position:relative;}
-.lib-fav-btn{position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:var(--surface);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer;}
-.lib-fav-btn.on{color:#e8a90f;border-color:#e8a90f;}
+.lib-fav-btn{position:absolute;top:8px;right:8px;background:none;border:none;padding:2px;color:var(--line);cursor:pointer;line-height:0;}
+.lib-fav-btn.on{color:#e8a90f;}
 .lib-item-usage{font-size:.68rem;color:var(--muted);}
 .lib-detail-fav{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-radius:100px;padding:6px 14px;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;}
 .lib-detail-fav.on{color:#e8a90f;border-color:#e8a90f;background:#fbf1dc;}
@@ -89,7 +89,7 @@ button{font-family:inherit;}
 .lib-detail-rename-actions{display:flex;gap:8px;margin-top:6px;}
 .lib-detail-rename-actions .primary-btn,.lib-detail-rename-actions .ghost-btn{flex:1;padding:9px;}
 .lib-item:hover{border-color:var(--accent);}
-.lib-item-thumb{width:68px;height:68px;border-radius:10px;background:var(--raised);border:1px solid var(--line);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+.lib-item-thumb{width:92px;height:92px;border-radius:10px;background:var(--raised);border:1px solid var(--line);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .lib-item-thumb img{width:100%;height:100%;object-fit:cover;}
 .lib-item-name{flex:1;min-width:0;font-size:.85rem;font-weight:600;color:var(--ink);text-transform:capitalize;}
 .lib-item-sub{font-size:.72rem;color:var(--muted);text-transform:capitalize;flex-shrink:0;}
