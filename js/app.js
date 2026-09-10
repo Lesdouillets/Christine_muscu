@@ -507,7 +507,50 @@ function reopenCard(exerciseSessionId) {
 
 // ---------- Bibliothèque ----------
 
+// Regroupement des muscles ciblés (champ "target" du jeu de données) en
+// catégories simples pour le filtre de la bibliothèque, à la demande de
+// Christine ("classer les gifs par catégorie : fesses, dos, bras...").
+const TARGET_CATEGORIES = [
+  { key: "fessiers", label: "Fessiers", targets: ["glutes"] },
+  { key: "dos", label: "Dos", targets: ["upper back", "lats", "spine", "traps", "serratus anterior", "levator scapulae"] },
+  { key: "bras", label: "Bras", targets: ["biceps", "triceps", "forearms"] },
+  { key: "pectoraux", label: "Pectoraux", targets: ["pectorals"] },
+  { key: "epaules", label: "Épaules", targets: ["delts"] },
+  { key: "abdos", label: "Abdos", targets: ["abs"] },
+  { key: "jambes", label: "Jambes", targets: ["quads", "hamstrings", "calves", "adductors", "abductors"] },
+  { key: "cardio", label: "Cardio", targets: ["cardiovascular system"] },
+];
+const TARGET_TO_CATEGORY = {};
+for (const cat of TARGET_CATEGORIES) {
+  for (const t of cat.targets) TARGET_TO_CATEGORY[t] = cat.key;
+}
+function categoryOf(ex) {
+  return TARGET_TO_CATEGORY[(ex.target || "").toLowerCase()] || "autres";
+}
+
+let libraryCategory = null; // null = "Tout"
+
+function renderLibraryCategoryChips() {
+  const row = document.getElementById("library-categories");
+  if (row.dataset.built) return;
+  row.dataset.built = "1";
+  const chips = [{ key: null, label: "Tout" }, ...TARGET_CATEGORIES, { key: "autres", label: "Autres" }];
+  for (const c of chips) {
+    const btn = document.createElement("button");
+    btn.className = "lib-cat-chip" + (libraryCategory === c.key ? " sel" : "");
+    btn.textContent = c.label;
+    btn.addEventListener("click", () => {
+      libraryCategory = c.key;
+      row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.remove("sel"));
+      btn.classList.add("sel");
+      renderLibrary(document.getElementById("library-search").value);
+    });
+    row.appendChild(btn);
+  }
+}
+
 async function renderLibrary(filterText) {
+  renderLibraryCategoryChips();
   const gridEl = document.getElementById("library-grid");
   const statusEl = document.getElementById("lib-status");
   const count = await Db.countLibraryExercises();
@@ -517,7 +560,10 @@ async function renderLibrary(filterText) {
     statusEl.textContent = "";
   }
 
-  const results = await Db.searchLibraryExercises(filterText || "");
+  let results = await Db.searchLibraryExercises(filterText || "");
+  if (libraryCategory) {
+    results = results.filter((ex) => categoryOf(ex) === libraryCategory);
+  }
   gridEl.innerHTML = "";
 
   if (results.length === 0 && count > 0) {
