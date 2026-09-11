@@ -159,7 +159,8 @@ button{font-family:inherit;}
 .history-line{font-size:.75rem;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:9px;padding:8px 11px;line-height:1.45;}
 .history-line b{color:var(--ink);}
 
-.reps-stepper{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 13px;}
+.reps-stepper,.session-tours-row{display:flex;align-items:center;justify-content:space-between;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:9px 13px;}
+.session-tours-row{margin:0 16px 12px;}
 .stepper-ctrl{display:flex;align-items:center;gap:12px;}
 .stepper-ctrl button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:1rem;cursor:pointer;}
 .stepper-ctrl .num{font-family:'IBM Plex Mono';font-size:1.05rem;font-weight:600;min-width:2.4ch;text-align:center;font-variant-numeric:tabular-nums;color:var(--ink);}

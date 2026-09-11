@@ -272,8 +272,23 @@ async function openSession(sessionId) {
   const session = await Db.getSession(sessionId);
   document.getElementById("session-title-display").textContent = session.title;
   document.getElementById("session-date-display").textContent = formatDateFr(session.date);
+  document.getElementById("session-tours-value").textContent = session.tours || 1;
   await renderExerciseList();
   goTo("session");
+}
+
+// Change le nombre de tours d'une séance déjà créée (visible et modifiable
+// depuis l'écran de la séance, pas seulement à la création) - à la demande
+// de Christine. Les tours en trop ne sont pas rendus si on en retire, mais
+// rien n'est supprimé en base : remonter le nombre les fait réapparaître.
+async function stepSessionTours(delta) {
+  const session = await Db.getSession(currentSessionId);
+  if (!session) return;
+  const next = Math.min(10, Math.max(1, (session.tours || 1) + delta));
+  session.tours = next;
+  await Db.updateSession(session);
+  document.getElementById("session-tours-value").textContent = next;
+  await renderExerciseList();
 }
 
 async function renderExerciseList() {
@@ -1449,6 +1464,8 @@ async function init() {
   document.getElementById("create-session-btn").addEventListener("click", createSession);
   document.getElementById("new-session-tours-minus").addEventListener("click", () => stepNewSessionTours(-1));
   document.getElementById("new-session-tours-plus").addEventListener("click", () => stepNewSessionTours(1));
+  document.getElementById("session-tours-minus").addEventListener("click", () => stepSessionTours(-1));
+  document.getElementById("session-tours-plus").addEventListener("click", () => stepSessionTours(1));
   document.getElementById("duplicate-session-btn").addEventListener("click", () => {
     if (currentSessionId) duplicateSession(currentSessionId);
   });
