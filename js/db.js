@@ -128,6 +128,31 @@ const Db = {
     });
   },
 
+  // Tout l'historique d'un exercice de bibliothèque donné, toutes séances
+  // confondues (sert à l'onglet "Progrès" - graphique d'évolution).
+  async getExerciseSessionsByLibraryId(libraryExerciseId) {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["exerciseSessions"], "readonly");
+      const idx = t.objectStore("exerciseSessions").index("libraryExerciseId");
+      const req = idx.getAll(libraryExerciseId);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  // Toutes les entrées d'exercice, toutes séances confondues (sert à
+  // construire la liste "quels exercices ont un historique" - onglet Progrès).
+  async getAllExerciseSessions() {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["exerciseSessions"], "readonly");
+      const req = t.objectStore("exerciseSessions").getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
   async getExerciseSessionsForSession(sessionId) {
     const db = this._db;
     return new Promise((resolve, reject) => {
