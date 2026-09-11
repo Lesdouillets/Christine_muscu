@@ -32,7 +32,11 @@
       <span>L'import depuis une photo WhatsApp arrivera dans une prochaine version - pour l'instant, ajoute tes séances à la main.</span>
     </div>
     <div class="list" id="session-list"></div>
-    <button class="export-link" id="export-btn">⭳ exporter mes séances</button>
+    <div class="export-row">
+      <button class="export-link" id="export-btn">⭳ exporter une sauvegarde</button>
+      <button class="export-link" id="import-btn">⭴ importer une sauvegarde</button>
+      <input type="file" id="import-file-input" accept="application/json" hidden>
+    </div>
     <div class="bottomnav">
       <button class="navitem" data-nav="journal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
@@ -169,6 +173,7 @@
     <div class="scroll">
       <div class="acc-list" id="exercise-list"></div>
       <button class="add-lib-btn" id="add-exercise-btn">+ ajouter un exercice à cette séance</button>
+      <button class="ghost-btn" id="duplicate-session-btn">Recommencer cette séance aujourd'hui</button>
       <button class="ghost-btn session-delete-btn" id="delete-session-btn">Supprimer cette séance</button>
     </div>
   </section>
@@ -217,7 +222,7 @@
       <button class="lib-detail-rename-btn" id="lib-detail-rename-btn" title="Renommer" aria-label="Renommer">✎</button>
     </div>
     <div class="field" id="lib-detail-rename-field" style="margin:0;" hidden>
-      <input type="text" id="lib-detail-rename-input">
+      <input type="text" id="lib-detail-rename-input" autocomplete="off">
       <div class="lib-detail-rename-actions">
         <button class="primary-btn" id="lib-detail-rename-save">Enregistrer</button>
         <button class="ghost-btn" id="lib-detail-rename-cancel">Annuler</button>
