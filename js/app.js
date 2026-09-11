@@ -224,6 +224,14 @@ function openNewSessionForm() {
   goTo("new-session");
 }
 
+function stepNewSessionTours(delta) {
+  const input = document.getElementById("new-session-tours");
+  const min = parseInt(input.min, 10) || 1;
+  const max = parseInt(input.max, 10) || 10;
+  const next = Math.min(max, Math.max(min, (parseInt(input.value, 10) || min) + delta));
+  input.value = next;
+}
+
 async function createSession() {
   const title = document.getElementById("new-session-title").value.trim() || "Séance";
   const date = document.getElementById("new-session-date").value || todayIso();
@@ -292,11 +300,17 @@ async function buildExerciseCard(session, ex, last) {
   item.className = "acc-item";
   item.dataset.exerciseSessionId = ex.id;
 
+  // Le nom est capté sur l'exerciseSession au moment de l'ajout à la séance
+  // et ne bouge plus tout seul ; si l'exercice a depuis été renommé dans la
+  // bibliothèque, on affiche le nom à jour (comme pour l'onglet Progrès).
+  const libExForName = ex.libraryExerciseId ? await Db.getLibraryExercise(ex.libraryExerciseId) : null;
+  const displayName = (libExForName && libExForName.name) || ex.name;
+
   const head = document.createElement("button");
   head.className = "acc-head";
   head.innerHTML = `
     <div class="acc-head-main">
-      <span class="acc-name">${escapeHtml(ex.name)}</span>
+      <span class="acc-name">${escapeHtml(displayName)}</span>
       <span class="acc-sub">${ex.targetReps} reps · ${typeLabel(ex.type)}</span>
     </div>
     <div class="acc-right">
@@ -315,13 +329,13 @@ async function buildExerciseCard(session, ex, last) {
   body.className = "acc-body";
 
   // gif (bibliothèque publique importée en phase 2, ou gif ajouté à la main)
-  const libEx = ex.libraryExerciseId ? await Db.getLibraryExercise(ex.libraryExerciseId) : null;
+  const libEx = libExForName;
   const gifUrl = gifUrlOf(libEx);
   const gifRow = document.createElement("div");
   gifRow.className = "gif-row";
   if (gifUrl) {
     gifRow.innerHTML = `
-      <div class="gif-thumb"><img src="${gifUrl}" alt="${escapeHtml(ex.name)}" loading="lazy"></div>
+      <div class="gif-thumb"><img src="${gifUrl}" alt="${escapeHtml(displayName)}" loading="lazy"></div>
       <div class="gif-meta"><span class="t">${escapeHtml(libEx.target || libEx.bodyPart || "")}</span></div>
     `;
   } else {
@@ -834,8 +848,19 @@ let newExerciseReps = 10;
 let newExerciseName = "";
 let modalCategory = null;
 let modalEquipment = null;
+let modalFavoritesOnly = false;
+// Exercice de bibliothèque déjà existant en cours de sélection (on passe par
+// l'étape "répétitions" avant de l'ajouter, comme pour un exercice tout
+// neuf) - null quand on crée un exercice qui n'existe pas encore.
+let pendingExistingLibEx = null;
 
 function buildModalChips() {
+  buildChipRowCustom(
+    "modal-quickfilter",
+    [{ key: false, label: "Tout" }, { key: true, label: "★ Favoris" }],
+    () => modalFavoritesOnly,
+    (key) => { modalFavoritesOnly = key; searchExercisesInModal(document.getElementById("exercise-search-input").value); }
+  );
   buildChipRowCustom(
     "modal-categories",
     [{ key: null, label: "Tout" }, ...TARGET_CATEGORIES, { key: "autres", label: "Autres" }],
@@ -874,9 +899,15 @@ function openExerciseModal() {
   document.getElementById("new-exercise-form").hidden = true;
   newExerciseReps = 10;
   newExerciseName = "";
+  pendingExistingLibEx = null;
   modalCategory = null;
   modalEquipment = null;
+  modalFavoritesOnly = false;
   buildModalChips();
+  document.getElementById("modal-quickfilter").hidden = false;
+  document.getElementById("modal-categories").hidden = false;
+  document.getElementById("modal-equipment").hidden = false;
+  document.getElementById("modal-quickfilter").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
   document.getElementById("modal-categories").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
   document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
   document.getElementById("new-exercise-reps-value").textContent = "10";
@@ -892,9 +923,18 @@ async function searchExercisesInModal(query) {
   const rawQuery = query.trim();
   const q = rawQuery.toLowerCase();
   document.getElementById("new-exercise-form").hidden = true;
+  pendingExistingLibEx = null;
   let results = (await Db.getAllLibraryExercises()).filter((ex) => matchesSearch(ex.name, q));
   if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
   if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
+  if (modalFavoritesOnly) results = results.filter((ex) => ex.favorite);
+  // Pendant la saisie, on cache les rangées de filtres pour laisser toute la
+  // place aux résultats - sur téléphone le clavier prend déjà la moitié de
+  // l'écran, inutile de rogner encore plus l'espace visible.
+  const hideFilters = rawQuery.length > 0;
+  document.getElementById("modal-quickfilter").hidden = hideFilters;
+  document.getElementById("modal-categories").hidden = hideFilters;
+  document.getElementById("modal-equipment").hidden = hideFilters;
   const resultsEl = document.getElementById("exercise-search-results");
   resultsEl.innerHTML = "";
 
@@ -903,7 +943,7 @@ async function searchExercisesInModal(query) {
     const div = document.createElement("div");
     div.className = "result-item result-item-withgif";
     div.innerHTML = `${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}<span>${escapeHtml(r.name)} (${typeLabel(r.type)})</span>`;
-    div.addEventListener("click", () => addExerciseToSession(r));
+    div.addEventListener("click", () => openReprsStepForExisting(r));
     resultsEl.appendChild(div);
   }
 
@@ -918,10 +958,25 @@ async function searchExercisesInModal(query) {
 }
 
 function openNewExerciseForm(name) {
+  pendingExistingLibEx = null;
   newExerciseName = name;
   newExerciseReps = 10;
   document.getElementById("new-exercise-name-display").textContent = name;
   document.getElementById("new-exercise-reps-value").textContent = "10";
+  document.getElementById("new-exercise-type-field").hidden = false;
+  document.getElementById("new-exercise-form").hidden = false;
+}
+
+// Un exercice de la bibliothèque existe déjà (trouvé par la recherche) : on
+// demande juste le nombre de répétitions avant de l'ajouter à la séance,
+// sans redemander son type (déjà connu).
+function openReprsStepForExisting(libEx) {
+  pendingExistingLibEx = libEx;
+  newExerciseName = libEx.name;
+  newExerciseReps = 10;
+  document.getElementById("new-exercise-name-display").textContent = libEx.name;
+  document.getElementById("new-exercise-reps-value").textContent = "10";
+  document.getElementById("new-exercise-type-field").hidden = true;
   document.getElementById("new-exercise-form").hidden = false;
 }
 
@@ -943,6 +998,10 @@ async function addExerciseToSession(libraryExercise, targetReps) {
 }
 
 async function confirmAddExerciseFromModal() {
+  if (pendingExistingLibEx) {
+    await addExerciseToSession(pendingExistingLibEx, newExerciseReps);
+    return;
+  }
   if (!newExerciseName) return;
   const type = document.getElementById("new-exercise-type").value;
   const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif: null });
@@ -1304,6 +1363,8 @@ async function init() {
     })
   );
   document.getElementById("create-session-btn").addEventListener("click", createSession);
+  document.getElementById("new-session-tours-minus").addEventListener("click", () => stepNewSessionTours(-1));
+  document.getElementById("new-session-tours-plus").addEventListener("click", () => stepNewSessionTours(1));
   document.getElementById("duplicate-session-btn").addEventListener("click", () => {
     if (currentSessionId) duplicateSession(currentSessionId);
   });

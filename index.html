@@ -155,7 +155,11 @@
     </div>
     <div class="field">
       <span class="field-label">Nombre de tours</span>
-      <input type="number" id="new-session-tours" min="1" max="10" value="4">
+      <div class="stepper">
+        <button type="button" class="stepper-btn" id="new-session-tours-minus" aria-label="Moins de tours">−</button>
+        <input type="number" id="new-session-tours" min="1" max="10" value="4" readonly>
+        <button type="button" class="stepper-btn" id="new-session-tours-plus" aria-label="Plus de tours">+</button>
+      </div>
     </div>
     <div class="bottom-bar">
       <button class="primary-btn" id="create-session-btn">Créer la séance</button>
@@ -189,11 +193,12 @@
     <div class="field" style="margin:0;">
       <input type="text" id="exercise-search-input" placeholder="chercher ou ajouter un exercice…">
     </div>
+    <div class="lib-cat-row" id="modal-quickfilter"></div>
     <div class="lib-cat-row" id="modal-categories"></div>
     <div class="lib-cat-row" id="modal-equipment"></div>
     <div id="exercise-search-results"></div>
     <div id="new-exercise-form" hidden>
-      <div class="field" style="margin:0;">
+      <div class="field" style="margin:0;" id="new-exercise-type-field">
         <span class="field-label">Type</span>
         <select id="new-exercise-type">
           <option value="barre">Barre</option>
