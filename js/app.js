@@ -1590,8 +1590,31 @@ function on(id, event, handler) {
   else console.warn(`[carnet-muscu] élément #${id} introuvable - vérifie que la page est à jour (ferme et rouvre l'appli).`);
 }
 
+// Migration ponctuelle (une seule fois par appareil) : les exercices déjà
+// utilisés dans une séance AVANT ce correctif (comme "Hip Thrust" chez
+// Christine) n'avaient jamais été marqués favoris automatiquement - ils
+// disparaissaient donc de la modale d'ajout, filtrée par défaut sur les
+// favoris. On les rattrape ici une fois pour toutes.
+async function migrateFavoritesForAlreadyUsedExercises() {
+  const FLAG = "carnet-muscu-migrated-fav-used-v1";
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const all = await Db.getAllLibraryExercises();
+    for (const ex of all) {
+      if ((ex.usageCount || 0) > 0 && !ex.favorite) {
+        ex.favorite = true;
+        await Db.updateLibraryExercise(ex);
+      }
+    }
+  } catch (err) {
+    console.error("[carnet-muscu] échec de la migration des favoris :", err);
+  }
+  localStorage.setItem(FLAG, "1");
+}
+
 async function init() {
   await Db.init();
+  await migrateFavoritesForAlreadyUsedExercises();
   seedPublicLibraryIfNeeded().then(() => {
     // Une fois l'import terminé, on rafraîchit la bibliothèque si elle est
     // affichée (premier lancement, avec connexion).
