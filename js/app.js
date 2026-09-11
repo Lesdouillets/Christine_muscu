@@ -220,7 +220,7 @@ function escapeHtml(str) {
 function openNewSessionForm() {
   document.getElementById("new-session-title").value = "Séance";
   document.getElementById("new-session-date").value = todayIso();
-  document.getElementById("new-session-tours").value = 1;
+  document.getElementById("new-session-tours").value = 4;
   goTo("new-session");
 }
 
