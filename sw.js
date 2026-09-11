@@ -9,13 +9,14 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v12";
+const CACHE_NAME = "carnet-muscu-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./css/app.css",
   "./js/db.js",
+  "./js/sync.js",
   "./js/app.js",
   "./data/exercises-library.json",
   "./icons/icon-192.png",

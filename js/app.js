@@ -1495,7 +1495,11 @@ function buildProgressChart(points, unit) {
 // appareils : on exporte sur l'un, on transfère le fichier (AirDrop, mail...),
 // on importe sur l'autre.
 
-async function exportSessions() {
+// Construit l'objet complet de sauvegarde (séances + bibliothèque) - utilisé
+// à la fois par l'export en fichier JSON ci-dessous et par la synchronisation
+// cloud (voir js/sync.js), pour ne pas dupliquer cette logique à deux
+// endroits.
+async function buildBackupPayload() {
   const sessions = await Db.getAllSessions();
   const fullSessions = [];
   for (const s of sessions) {
@@ -1503,7 +1507,11 @@ async function exportSessions() {
     fullSessions.push({ ...s, exercises: exs });
   }
   const library = await Db.getAllLibraryExercises();
-  const data = { version: 1, exportedAt: new Date().toISOString(), sessions: fullSessions, library };
+  return { version: 1, exportedAt: new Date().toISOString(), sessions: fullSessions, library };
+}
+
+async function exportSessions() {
+  const data = await buildBackupPayload();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1519,6 +1527,49 @@ async function exportSessions() {
 // jour s'il existe déjà (même id) - ce qui est justement ce qu'il faut pour
 // faire arriver un renommage ou un favori fait ailleurs. Accepte aussi
 // l'ancien format d'export (un simple tableau de séances, sans bibliothèque).
+// Fusionne un objet de sauvegarde (fichier importé OU récupéré du cloud, voir
+// js/sync.js) dans la base locale. N'écrase et ne supprime jamais rien
+// aveuglément : chaque séance/exercice de séance est ajouté ou mis à jour
+// (même id), et un exercice de bibliothèque n'est remplacé que si sa version
+// importée est plus récente (updatedAt) que celle déjà présente sur cet
+// appareil - ce qui laisse un renommage ou un favori fait ailleurs (sur un
+// autre appareil) arriver correctement sans perdre un changement plus récent
+// fait ici. Retourne les compteurs, à afficher par l'appelant.
+async function mergeBackupData(data) {
+  const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
+  const library = Array.isArray(data.library) ? data.library : [];
+
+  let sessionCount = 0, exerciseCount = 0;
+  for (const s of sessions) {
+    if (!s || !s.id) continue;
+    const { exercises, ...sessionFields } = s;
+    await Db.updateSession(sessionFields);
+    sessionCount++;
+    for (const ex of exercises || []) {
+      if (!ex || !ex.id) continue;
+      await Db.updateExerciseSession(ex);
+      exerciseCount++;
+    }
+  }
+  let libraryCount = 0, librarySkippedCount = 0;
+  for (const libEx of library) {
+    if (!libEx || !libEx.id) continue;
+    const local = await Db.getLibraryExercise(libEx.id);
+    if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
+      librarySkippedCount++;
+      continue;
+    }
+    await Db.updateLibraryExercise(libEx);
+    libraryCount++;
+  }
+
+  await renderJournal(document.getElementById("journal-search").value);
+  if (document.getElementById("view-library").classList.contains("active")) {
+    await renderLibrary(document.getElementById("library-search").value);
+  }
+  return { sessionCount, exerciseCount, libraryCount, librarySkippedCount, sessionsSeen: sessions.length, librarySeen: library.length };
+}
+
 async function importBackup(file) {
   let data;
   try {
@@ -1538,41 +1589,45 @@ async function importBackup(file) {
     return;
   }
 
-  let sessionCount = 0, exerciseCount = 0;
-  for (const s of sessions) {
-    if (!s || !s.id) continue;
-    const { exercises, ...sessionFields } = s;
-    await Db.updateSession(sessionFields);
-    sessionCount++;
-    for (const ex of exercises || []) {
-      if (!ex || !ex.id) continue;
-      await Db.updateExerciseSession(ex);
-      exerciseCount++;
-    }
-  }
-  let libraryCount = 0, librarySkippedCount = 0;
-  for (const libEx of library) {
-    if (!libEx || !libEx.id) continue;
-    // Ne jamais écraser une modification locale (renommage, favori) plus
-    // récente que celle importée : on ne remplace que si l'exercice importé
-    // est plus récent (ou si aucun des deux n'a de date, comportement
-    // d'origine conservé pour ne rien casser sur d'anciennes sauvegardes).
-    const local = await Db.getLibraryExercise(libEx.id);
-    if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
-      librarySkippedCount++;
-      continue;
-    }
-    await Db.updateLibraryExercise(libEx);
-    libraryCount++;
-  }
-
+  const { sessionCount, exerciseCount, libraryCount, librarySkippedCount } = await mergeBackupData(data);
   const skippedMsg = librarySkippedCount > 0
     ? ` (${librarySkippedCount} exercice(s) de bibliothèque déjà plus récents sur cet appareil ont été conservés tels quels)`
     : "";
   alert(`Import terminé : ${sessionCount} séance(s) et ${libraryCount} exercice(s) de bibliothèque mis à jour (${exerciseCount} exercice(s) de séance).${skippedMsg}`);
-  await renderJournal(document.getElementById("journal-search").value);
-  if (document.getElementById("view-library").classList.contains("active")) {
-    await renderLibrary(document.getElementById("library-search").value);
+}
+
+// ---------- Synchronisation cloud (voir js/sync.js) ----------
+
+function renderSyncSection() {
+  const code = getSyncCode();
+  document.getElementById("sync-setup").hidden = !!code;
+  document.getElementById("sync-enter-code-field").hidden = true;
+  document.getElementById("sync-active").hidden = !code;
+  if (code) {
+    document.getElementById("sync-code-display").textContent = code;
+    const last = getLastSyncLabel();
+    document.getElementById("sync-last-label").textContent = last
+      ? `Dernière synchro sur cet appareil : ${last}`
+      : "Pas encore synchronisé depuis cet appareil.";
+  }
+}
+
+// Enveloppe un bouton de sync : désactive pendant l'appel (les allers-retours
+// réseau prennent un instant), et affiche toute erreur clairement plutôt que
+// de rester bloqué en silence - même logique que pour l'ajout d'exercice.
+async function withSyncButton(btn, label, fn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = label;
+  try {
+    await fn();
+  } catch (err) {
+    console.error("[carnet-muscu] échec de synchronisation :", err);
+    alert(err && err.message ? err.message : "Échec de la synchronisation (vérifie ta connexion).");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+    renderSyncSection();
   }
 }
 
@@ -1740,6 +1795,49 @@ async function init() {
     const file = e.target.files[0];
     e.target.value = ""; // pour pouvoir réimporter le même fichier plus tard si besoin
     if (file) await importBackup(file);
+  });
+  renderSyncSection();
+  on("sync-create-code-btn", "click", () => {
+    setSyncCode(generateSyncCode());
+    renderSyncSection();
+    alert("Code créé. Copie-le et colle-le dans « J'ai déjà un code » sur ton autre appareil, puis fais « Sauvegarder dans le cloud » ici pour envoyer tes données existantes.");
+  });
+  on("sync-enter-code-btn", "click", () => {
+    document.getElementById("sync-code-input").value = "";
+    document.getElementById("sync-enter-code-field").hidden = false;
+    document.getElementById("sync-code-input").focus();
+  });
+  on("sync-cancel-code-btn", "click", () => {
+    document.getElementById("sync-enter-code-field").hidden = true;
+  });
+  on("sync-confirm-code-btn", "click", () => {
+    const code = document.getElementById("sync-code-input").value.trim();
+    if (!code) return;
+    setSyncCode(code);
+    renderSyncSection();
+  });
+  on("sync-copy-code-btn", "click", async () => {
+    const code = getSyncCode();
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      alert("Code copié.");
+    } catch {
+      prompt("Copie ce code manuellement :", code);
+    }
+  });
+  on("sync-push-btn", "click", (e) => withSyncButton(e.target, "Envoi…", async () => {
+    await pushBackupToCloud();
+    alert("Sauvegarde envoyée dans le cloud.");
+  }));
+  on("sync-pull-btn", "click", (e) => withSyncButton(e.target, "Récupération…", async () => {
+    const r = await pullBackupFromCloud();
+    alert(`Récupération terminée : ${r.sessionCount} séance(s) et ${r.libraryCount} exercice(s) de bibliothèque mis à jour.`);
+  }));
+  on("sync-forget-btn", "click", () => {
+    if (!confirm("Oublier ce code de synchronisation sur cet appareil ? Tes données locales ne sont pas touchées, mais cet appareil ne se synchronisera plus tant que tu n'auras pas remis un code.")) return;
+    forgetSyncCode();
+    renderSyncSection();
   });
   // Ferme n'importe quelle fenêtre (gif, ajout d'exercice...) si on touche
   // à côté, en dehors de son contenu.

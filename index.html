@@ -39,6 +39,34 @@
       <button class="export-link" id="import-btn">⭴ importer une sauvegarde</button>
       <input type="file" id="import-file-input" accept="application/json" hidden>
     </div>
+
+    <!-- Synchronisation cloud entre appareils (Android + Mac) - voir js/sync.js -->
+    <div class="sync-section" id="sync-section">
+      <span class="field-label">Synchronisation entre appareils</span>
+      <div id="sync-setup">
+        <p class="sync-hint">Pas encore configurée sur cet appareil.</p>
+        <button class="ghost-btn" id="sync-create-code-btn">Créer un code de synchronisation</button>
+        <button class="ghost-btn" id="sync-enter-code-btn">J'ai déjà un code (autre appareil)</button>
+      </div>
+      <div id="sync-enter-code-field" class="field" style="margin:0;" hidden>
+        <input type="text" id="sync-code-input" placeholder="colle ton code ici" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="lib-detail-rename-actions">
+          <button class="primary-btn" id="sync-confirm-code-btn">Valider</button>
+          <button class="ghost-btn" id="sync-cancel-code-btn">Annuler</button>
+        </div>
+      </div>
+      <div id="sync-active" hidden>
+        <p class="sync-hint">Code actif sur cet appareil (à copier sur ton autre appareil) :</p>
+        <div class="sync-code-row">
+          <code id="sync-code-display"></code>
+          <button class="ghost-btn" id="sync-copy-code-btn">Copier</button>
+        </div>
+        <button class="primary-btn" id="sync-push-btn">⭱ Sauvegarder dans le cloud</button>
+        <button class="ghost-btn" id="sync-pull-btn">⭳ Récupérer depuis le cloud</button>
+        <p class="sync-hint" id="sync-last-label"></p>
+        <button class="ghost-btn exo-action-danger" id="sync-forget-btn">Oublier ce code sur cet appareil</button>
+      </div>
+    </div>
     <div class="bottomnav">
       <button class="navitem" data-nav="journal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
@@ -325,7 +353,10 @@
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/db.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
