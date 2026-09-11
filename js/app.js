@@ -912,7 +912,10 @@ function openExerciseModal() {
   document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("exercise-modal").classList.add("open");
-  document.getElementById("exercise-search-input").focus();
+  // Pas de focus auto sur le champ : sur téléphone ça ouvre le clavier tout
+  // de suite et écrase les filtres/résultats avant même d'avoir tapé quoi
+  // que ce soit. On laisse Christine ouvrir le clavier elle-même en touchant
+  // le champ quand elle veut chercher par texte.
   searchExercisesInModal("");
 }
 function closeExerciseModal() {

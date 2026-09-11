@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v3";
+const CACHE_NAME = "carnet-muscu-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -45,8 +45,13 @@ self.addEventListener("activate", (event) => {
 // au passage) ; sans connexion, on retombe sur la dernière copie connue.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  // "reload" force le navigateur à revalider avec le serveur au lieu de
+  // servir une copie de son propre cache HTTP (GitHub Pages envoie des
+  // en-têtes de cache assez longs) - sans ça, "réseau d'abord" pouvait
+  // quand même renvoyer une vieille version tant que ce cache HTTP-là
+  // n'expirait pas, même juste après une mise à jour poussée sur GitHub.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "reload" })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
