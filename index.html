@@ -311,6 +311,16 @@
       <span class="field-label">Note personnelle (visible pendant les séances)</span>
       <textarea id="lib-detail-note-input" rows="2" placeholder="ex. bien garder le dos droit, éviter si douleur épaule…"></textarea>
     </div>
+    <button class="ghost-btn" id="lib-detail-gif-btn">Changer le gif (par un lien)</button>
+    <div class="field" id="lib-detail-gif-field" style="margin:0;" hidden>
+      <span class="field-label">Lien du gif</span>
+      <input type="url" id="lib-detail-gif-input" placeholder="https://…" autocomplete="off">
+      <p class="sync-hint">Une photo prise depuis le téléphone est trop lourde pour la synchronisation cloud : préfère un lien.</p>
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="lib-detail-gif-save">Enregistrer</button>
+        <button class="ghost-btn" id="lib-detail-gif-cancel">Annuler</button>
+      </div>
+    </div>
     <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
     <button class="ghost-btn exo-action-danger" id="lib-detail-delete-btn">Supprimer de la bibliothèque</button>
   </div>

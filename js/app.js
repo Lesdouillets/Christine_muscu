@@ -924,6 +924,33 @@ function openLibraryDetail(ex) {
     await Db.updateLibraryExercise(ex);
   };
   document.getElementById("lib-detail-rename-field").hidden = true;
+  // Remplacer le gif par un lien (à la demande de Christine, après qu'une
+  // photo ajoutée depuis son téléphone ait rendu une sauvegarde trop
+  // volumineuse pour la synchronisation cloud - voir js/sync.js). Ne propose
+  // volontairement que "lien", jamais "photo", pour ne pas recréer le
+  // problème qu'on est en train de corriger.
+  const gifField = document.getElementById("lib-detail-gif-field");
+  const gifInput = document.getElementById("lib-detail-gif-input");
+  gifField.hidden = true;
+  document.getElementById("lib-detail-gif-btn").onclick = () => {
+    gifInput.value = ex.gif && ex.gif.kind === "link" ? ex.gif.value : "";
+    gifField.hidden = false;
+    gifInput.focus();
+  };
+  document.getElementById("lib-detail-gif-cancel").onclick = () => {
+    gifField.hidden = true;
+  };
+  document.getElementById("lib-detail-gif-save").onclick = async () => {
+    const url = gifInput.value.trim();
+    ex.gif = url ? { kind: "link", value: url } : null;
+    ex.updatedAt = Date.now();
+    await Db.updateLibraryExercise(ex);
+    const gifUrl2 = gifUrlOf(ex);
+    document.getElementById("lib-detail-gif").innerHTML = gifUrl2
+      ? `<img src="${gifUrl2}" alt="${escapeHtml(ex.name)}">`
+      : `<div class="lib-detail-noGif">pas de démonstration pour cet exercice</div>`;
+    gifField.hidden = true;
+  };
   document.getElementById("lib-detail-rename-btn").onclick = () => {
     document.getElementById("lib-detail-rename-input").value = ex.name;
     document.getElementById("lib-detail-rename-field").hidden = false;

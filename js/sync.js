@@ -88,8 +88,20 @@ async function pushBackupToCloud() {
   // clair plutôt qu'une erreur Firestore obscure.
   const approxBytes = new Blob([json]).size;
   if (approxBytes > 900000) {
+    // On identifie le ou les exercices responsables (gif "file" = photo encodée
+    // en base64, donc volumineuse) pour que Christine sache lequel corriger,
+    // plutôt qu'un message vague qui l'oblige à chercher elle-même.
+    const offenders = (payload.library || [])
+      .filter((ex) => ex.gif && ex.gif.kind === "file" && ex.gif.value)
+      .map((ex) => ({ name: ex.name, ko: Math.round(new Blob([ex.gif.value]).size / 1024) }))
+      .sort((a, b) => b.ko - a.ko);
+    const detail = offenders.length
+      ? " En cause probable : " + offenders.slice(0, 3).map((o) => `« ${o.name} » (${o.ko} Ko)`).join(", ") + "."
+      : "";
     throw new Error(
-      "Ta sauvegarde est trop volumineuse pour le cloud (probablement à cause d'une photo/gif ajoutée depuis ton téléphone plutôt qu'un lien). Remplace ce gif par un lien pour pouvoir synchroniser."
+      "Ta sauvegarde est trop volumineuse pour le cloud (probablement à cause d'une photo/gif ajoutée depuis ton téléphone plutôt qu'un lien)." +
+        detail +
+        " Ouvre cet exercice dans la bibliothèque et clique sur « Changer le gif (par un lien) » pour pouvoir synchroniser."
     );
   }
   await getFirestore().collection("syncs").doc(code).set({
