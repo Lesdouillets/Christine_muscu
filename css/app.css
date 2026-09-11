@@ -223,3 +223,4 @@ button{font-family:inherit;}
 .result-item+.result-item{margin-top:6px;}
 .result-item-new{border-style:dashed;color:var(--accent);font-weight:600;}
 #new-exercise-form{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+#new-exercise-form[hidden]{display:none;}
