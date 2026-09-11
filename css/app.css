@@ -164,6 +164,10 @@ button{font-family:inherit;}
 .stepper-ctrl button{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:1rem;cursor:pointer;}
 .stepper-ctrl .num{font-family:'IBM Plex Mono';font-size:1.05rem;font-weight:600;min-width:2.4ch;text-align:center;font-variant-numeric:tabular-nums;color:var(--ink);}
 
+.exo-actions-row{display:flex;gap:8px;}
+.exo-action-btn{flex:1;background:none;border:1px solid var(--line);color:var(--muted);border-radius:11px;padding:9px;font-size:.8rem;font-weight:600;cursor:pointer;}
+.exo-action-btn.exo-action-danger{color:var(--warn);border-color:var(--warn-bg);}
+
 .weight-block{display:flex;flex-direction:column;gap:6px;}
 .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px;flex-wrap:wrap;}
 .seg button{flex:1;min-width:48px;background:none;border:none;color:var(--muted);padding:7px 4px;border-radius:8px;font-size:.78rem;font-family:'IBM Plex Mono';cursor:pointer;}

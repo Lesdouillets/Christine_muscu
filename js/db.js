@@ -115,6 +115,19 @@ const Db = {
     });
   },
 
+  // Retire un seul exercice d'une séance (contrairement à deleteSession qui
+  // supprime la séance entière) - à la demande de Christine ("pouvoir
+  // supprimer ou modifier un exo mis dans une séance").
+  async deleteExerciseSession(id) {
+    const db = this._db;
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["exerciseSessions"], "readwrite");
+      t.objectStore("exerciseSessions").delete(id);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+
   async deleteSession(sessionId) {
     const db = this._db;
     const exs = await this.getExerciseSessionsForSession(sessionId);

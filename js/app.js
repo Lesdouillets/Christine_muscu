@@ -395,6 +395,29 @@ async function buildExerciseCard(session, ex, last) {
   }
   body.appendChild(roundsWrap);
 
+  // Changer d'exercice / supprimer cet exercice de la seance - a la demande
+  // de Christine ("pouvoir supprimer ou modifier un exo mis dans une
+  // seance"). "Modifier" = remplacer par un autre exercice de la
+  // bibliotheque (le nombre de repetitions, lui, se change deja juste
+  // au-dessus via le stepper "Repetitions par tour").
+  const actionsRow = document.createElement("div");
+  actionsRow.className = "exo-actions-row";
+  actionsRow.innerHTML = `
+    <button type="button" class="exo-action-btn" data-action="swap">changer d'exercice</button>
+    <button type="button" class="exo-action-btn exo-action-danger" data-action="remove">supprimer</button>
+  `;
+  actionsRow.querySelector('[data-action="swap"]').addEventListener("click", (e) => {
+    e.stopPropagation();
+    openExerciseSwapModal(ex);
+  });
+  actionsRow.querySelector('[data-action="remove"]').addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm(`Supprimer « ${displayName} » de cette séance ? Cette action est définitive.`)) return;
+    await Db.deleteExerciseSession(ex.id);
+    await renderExerciseList();
+  });
+  body.appendChild(actionsRow);
+
   panel.appendChild(body);
   item.appendChild(head);
   item.appendChild(panel);
@@ -410,7 +433,9 @@ function feelingLabel(f) {
 // Suggestion simple (phase 6 du plan) : à partir du poids et du ressenti du
 // dernier passage, propose une charge pour aujourd'hui. Ne se prononce pas
 // si le dernier ressenti était "bien", ou si aucun poids n'a été noté.
-const WEIGHT_STEPS = [5, 10, 15, 20];
+// 0 permet de suggerer "la barre seule" (sans poids ajoute) quand on redescend
+// depuis 2x5 - a la demande de Christine.
+const WEIGHT_STEPS = [0, 5, 10, 15, 20];
 function suggestNextWeight(type, weight, feeling) {
   if (!feeling || feeling === "good") return null;
   if (type === "barre") {
@@ -420,8 +445,12 @@ function suggestNextWeight(type, weight, feeling) {
       const next = idx >= 0 && idx < WEIGHT_STEPS.length - 1 ? WEIGHT_STEPS[idx + 1] : null;
       return next ? `essaie 2×${next} aujourd'hui` : `essaie une charge libre plus lourde aujourd'hui`;
     }
+    // idx > 0 (et non "prev" tronque falsy) : 0 est une valeur valide, pas
+    // une absence de valeur - un bug ici renverrait "allège encore" au lieu
+    // de proposer "la barre seule" en repassant de 2x5 a 0.
     const prev = idx > 0 ? WEIGHT_STEPS[idx - 1] : null;
-    return prev ? `essaie 2×${prev} aujourd'hui` : `allège encore aujourd'hui`;
+    if (prev === null) return "allège encore aujourd'hui";
+    return prev === 0 ? "essaie la barre seule aujourd'hui" : `essaie 2×${prev} aujourd'hui`;
   }
   if (type === "halteres") {
     if (!weight) return null;
@@ -431,7 +460,7 @@ function suggestNextWeight(type, weight, feeling) {
       return next ? `essaie ${next} kg par main aujourd'hui` : `essaie une charge libre plus lourde aujourd'hui`;
     }
     const prev = idx > 0 ? WEIGHT_STEPS[idx - 1] : null;
-    return prev ? `essaie ${prev} kg par main aujourd'hui` : `allège encore aujourd'hui`;
+    return prev !== null ? `essaie ${prev} kg par main aujourd'hui` : `allège encore aujourd'hui`;
   }
   if (type === "poids_du_corps") {
     return feeling === "light" ? "essaie plus de répétitions aujourd'hui" : "réduis les répétitions si besoin aujourd'hui";
@@ -498,6 +527,7 @@ function buildRoundFull(session, ex, index) {
         </div>
         <div class="field-label">Poids ajouté (par côté)</div>
         <div class="seg" data-role="added">
+          <button data-val="0" class="${w.added === 0 ? "sel" : ""}">0</button>
           <button data-val="5" class="${w.added === 5 ? "sel" : ""}">2×5</button>
           <button data-val="10" class="${w.added === 10 ? "sel" : ""}">2×10</button>
           <button data-val="15" class="${w.added === 15 ? "sel" : ""}">2×15</button>
@@ -638,13 +668,17 @@ function categoryOf(ex) {
 
 // Deuxième filtre, par matériel (à la demande de Christine, combinable avec
 // le filtre par muscle et la recherche texte).
+// "Élastique" est place juste apres "Barre" (avant Câble/Machine) pour rester
+// visible sans avoir a faire defiler la rangee sur telephone - a la demande
+// de Christine, qui ne le voyait pas alors qu'il existait deja plus loin
+// dans la liste.
 const EQUIPMENT_CATEGORIES = [
   { key: "poids_du_corps", label: "Poids du corps", equipment: ["body weight", "assisted"] },
   { key: "halteres", label: "Haltères", equipment: ["dumbbell"] },
   { key: "barre", label: "Barre", equipment: ["barbell", "ez barbell", "olympic barbell", "trap bar"] },
+  { key: "elastique", label: "Élastique", equipment: ["band", "resistance band"] },
   { key: "cable", label: "Câble", equipment: ["cable"] },
   { key: "machine", label: "Machine", equipment: ["leverage machine", "smith machine", "sled machine", "stepmill machine", "elliptical machine", "upper body ergometer", "skierg machine", "stationary bike"] },
-  { key: "elastique", label: "Élastique", equipment: ["band", "resistance band"] },
   { key: "kettlebell", label: "Kettlebell", equipment: ["kettlebell"] },
 ];
 const EQUIPMENT_TO_CATEGORY = {};
@@ -853,6 +887,10 @@ let modalFavoritesOnly = false;
 // l'étape "répétitions" avant de l'ajouter, comme pour un exercice tout
 // neuf) - null quand on crée un exercice qui n'existe pas encore.
 let pendingExistingLibEx = null;
+// Id de l'exerciseSession a REMPLACER (mode "changer d'exercice" ouvert
+// depuis une carte de la séance) - null quand la modale sert a ajouter un
+// nouvel exercice à la séance (comportement normal).
+let swapTargetExerciseSessionId = null;
 
 function buildModalChips() {
   buildChipRowCustom(
@@ -900,6 +938,9 @@ function openExerciseModal() {
   newExerciseReps = 10;
   newExerciseName = "";
   pendingExistingLibEx = null;
+  swapTargetExerciseSessionId = null;
+  document.getElementById("exercise-modal-title").textContent = "Ajouter un exercice";
+  document.getElementById("confirm-add-exercise-verb").textContent = "Ajouter";
   modalCategory = null;
   modalEquipment = null;
   modalFavoritesOnly = false;
@@ -920,6 +961,17 @@ function openExerciseModal() {
 }
 function closeExerciseModal() {
   document.getElementById("exercise-modal").classList.remove("open");
+  swapTargetExerciseSessionId = null;
+}
+
+// Ouvre la meme modale de recherche/creation d'exercice, mais en mode
+// "remplacement" : au lieu d'ajouter un nouvel exercice a la seance, on met
+// a jour l'exercice existant (ex.libraryExerciseId/name/type) - les tours
+// deja saisis sont remis a zero puisqu'ils concernaient un autre exercice.
+function openExerciseSwapModal(ex) {
+  openExerciseModal();
+  swapTargetExerciseSessionId = ex.id;
+  document.getElementById("exercise-modal-title").textContent = "Changer d'exercice";
 }
 
 async function searchExercisesInModal(query) {
@@ -965,6 +1017,7 @@ function openNewExerciseForm(name) {
   newExerciseName = name;
   newExerciseReps = 10;
   document.getElementById("new-exercise-name-display").textContent = name;
+  document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = false;
   document.getElementById("new-exercise-form").hidden = false;
@@ -978,6 +1031,7 @@ function openReprsStepForExisting(libEx) {
   newExerciseName = libEx.name;
   newExerciseReps = 10;
   document.getElementById("new-exercise-name-display").textContent = libEx.name;
+  document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = true;
   document.getElementById("new-exercise-form").hidden = false;
@@ -1000,14 +1054,41 @@ async function addExerciseToSession(libraryExercise, targetReps) {
   await renderExerciseList();
 }
 
+// Remplace un exercice deja present dans la seance par un autre (sans
+// changer sa position) - les tours deja saisis sont remis a zero, car un
+// poids/ressenti note pour un exercice n'a pas de sens pour un autre.
+async function swapExerciseInSession(exerciseSessionId, libraryExercise, targetReps) {
+  const all = await Db.getExerciseSessionsForSession(currentSessionId);
+  const ex = all.find((e) => e.id === exerciseSessionId);
+  if (!ex) return;
+  ex.libraryExerciseId = libraryExercise.id;
+  ex.name = libraryExercise.name;
+  ex.type = libraryExercise.type;
+  ex.targetReps = targetReps || ex.targetReps;
+  ex.rounds = [];
+  await Db.updateExerciseSession(ex);
+  await bumpLibraryUsage(libraryExercise.id);
+  closeExerciseModal();
+  await renderExerciseList();
+  reopenCard(ex.id); // garde la carte ouverte sur le nouvel exercice
+}
+
 async function confirmAddExerciseFromModal() {
   if (pendingExistingLibEx) {
+    if (swapTargetExerciseSessionId) {
+      await swapExerciseInSession(swapTargetExerciseSessionId, pendingExistingLibEx, newExerciseReps);
+      return;
+    }
     await addExerciseToSession(pendingExistingLibEx, newExerciseReps);
     return;
   }
   if (!newExerciseName) return;
   const type = document.getElementById("new-exercise-type").value;
   const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif: null });
+  if (swapTargetExerciseSessionId) {
+    await swapExerciseInSession(swapTargetExerciseSessionId, libEx, newExerciseReps);
+    return;
+  }
   await addExerciseToSession(libEx, newExerciseReps);
 }
 
