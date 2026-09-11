@@ -170,7 +170,12 @@ async function renderJournal(filterText) {
     card.querySelector(".session-delete").addEventListener("click", async (e) => {
       e.stopPropagation();
       if (!confirm(`Supprimer la séance « ${s.title} » du ${formatDateFr(s.date)} ? Cette action est définitive.`)) return;
+      // Les exercices de cette séance ne seront plus "utilisés" une fois la
+      // séance supprimée - il faut le savoir AVANT de supprimer (sinon plus
+      // moyen de retrouver quels exercices étaient concernés).
+      const affectedIds = (await Db.getExerciseSessionsForSession(s.id)).map((e) => e.libraryExerciseId).filter(Boolean);
       await Db.deleteSession(s.id);
+      for (const id of new Set(affectedIds)) await recomputeLibraryUsageCount(id);
       await renderJournal(document.getElementById("journal-search").value);
     });
     listEl.appendChild(card);
@@ -487,6 +492,10 @@ async function buildExerciseCard(session, ex, last) {
     e.stopPropagation();
     if (!confirm(`Supprimer « ${displayName} » de cette séance ? Cette action est définitive.`)) return;
     await Db.deleteExerciseSession(ex.id);
+    // Sans ce recalcul, l'exercice resterait marqué "utilisé" dans la
+    // bibliothèque alors qu'il vient d'être retiré de cette séance - même
+    // bug que pour "changer d'exercice" (voir swapExerciseInSession).
+    await recomputeLibraryUsageCount(ex.libraryExerciseId);
     await renderExerciseList();
   });
   body.appendChild(actionsRow);
@@ -907,20 +916,43 @@ async function renderLibrary(filterText) {
   }
 }
 
-// Incrémente le compteur d'utilisation d'un exercice de bibliothèque - appelé
-// à chaque fois qu'il est ajouté à une séance (voir addExerciseToSession).
-// Le marque aussi favori automatiquement au passage : la modale d'ajout
-// filtre par défaut sur les favoris (à la demande de Christine), donc un
-// exercice utilisé mais jamais favorisé à la main (le cas de tous les
-// exercices importés de la bibliothèque publique, comme "Hip Thrust")
-// disparaissait de la liste dès la séance suivante - exactement le bug déjà
-// rencontré avec les exercices tout juste créés.
+// Recalcule le "utilisé X×" d'un exercice de bibliothèque à partir des VRAIES
+// séances qui l'utilisent encore (Db.getExerciseSessionsByLibraryId), plutôt
+// que de maintenir un compteur qu'on incrémente à la main.
+//
+// Pourquoi : un compteur incrémenté au moment d'AJOUTER l'exercice à une
+// séance (voir l'historique de bumpLibraryUsage) se déréglait dès qu'on
+// changeait d'avis - "changer d'exercice" dans une séance (swapExerciseInSession)
+// ou simplement le supprimer avant d'avoir fait un seul tour incrémentait
+// quand même le compteur, qui ne redescendait jamais. Résultat pour Christine :
+// des exercices marqués "utilisé X×" qu'elle n'avait en réalité jamais faits
+// (ex. "Band bent-over hip extension", juste survolé en cherchant un autre
+// exercice). En recalculant depuis les exerciseSessions à chaque fois qu'une
+// séance change (ajout, remplacement, suppression - voir les appels de cette
+// fonction et de recomputeLibraryUsageCount), le compteur reflète toujours
+// exactement ce qui est réellement dans les séances, sans jamais dériver.
+async function recomputeLibraryUsageCount(libraryExerciseId) {
+  if (!libraryExerciseId) return;
+  const libEx = await Db.getLibraryExercise(libraryExerciseId);
+  if (!libEx) return;
+  const uses = await Db.getExerciseSessionsByLibraryId(libraryExerciseId);
+  libEx.usageCount = uses.length;
+  await Db.updateLibraryExercise(libEx);
+}
+
+// Appelé quand un exercice est ajouté ou remplacé dans une séance (voir
+// addExerciseToSession et swapExerciseInSession) : recalcule son compteur
+// d'utilisation réel, et le marque favori automatiquement au passage - la
+// modale d'ajout filtre par défaut sur les favoris (à la demande de
+// Christine), donc un exercice utilisé mais jamais favorisé à la main (le
+// cas de tous les exercices importés de la bibliothèque publique, comme
+// "Hip Thrust") disparaissait de la liste dès la séance suivante.
 async function bumpLibraryUsage(libraryExerciseId) {
   const libEx = await Db.getLibraryExercise(libraryExerciseId);
   if (!libEx) return;
-  libEx.usageCount = (libEx.usageCount || 0) + 1;
   libEx.favorite = true;
   await Db.updateLibraryExercise(libEx);
+  await recomputeLibraryUsageCount(libraryExerciseId);
 }
 
 function openLibraryDetail(ex) {
@@ -1271,6 +1303,7 @@ async function swapExerciseInSession(exerciseSessionId, libraryExercise, targetR
   const all = await Db.getExerciseSessionsForSession(currentSessionId);
   const ex = all.find((e) => e.id === exerciseSessionId);
   if (!ex) return;
+  const previousLibraryExerciseId = ex.libraryExerciseId; // voir recompute ci-dessous
   ex.libraryExerciseId = libraryExercise.id;
   ex.name = libraryExercise.name;
   ex.type = libraryExercise.type;
@@ -1278,6 +1311,12 @@ async function swapExerciseInSession(exerciseSessionId, libraryExercise, targetR
   ex.rounds = [];
   await Db.updateExerciseSession(ex);
   await bumpLibraryUsage(libraryExercise.id);
+  // L'exercice qu'on vient de remplacer n'est plus dans aucune séance sous
+  // cet id (voir recomputeLibraryUsageCount) : sans ce recalcul, il resterait
+  // marqué "utilisé" alors qu'on ne l'a fait que le temps de changer d'avis.
+  if (previousLibraryExerciseId && previousLibraryExerciseId !== libraryExercise.id) {
+    await recomputeLibraryUsageCount(previousLibraryExerciseId);
+  }
   closeExerciseModal();
   await renderExerciseList();
   reopenCard(ex.id); // garde la carte ouverte sur le nouvel exercice
@@ -1793,9 +1832,41 @@ async function migrateFavoritesForAlreadyUsedExercises() {
   localStorage.setItem(FLAG, "1");
 }
 
+// Corrige une fois pour toutes les compteurs "utilisé X×" déjà faussés par
+// l'ancien système (incrémenté à l'ajout, jamais corrigé si on changeait
+// d'exercice ou le supprimait avant d'avoir fait un tour - voir
+// recomputeLibraryUsageCount ci-dessus). Exemple réel signalé par Christine :
+// "Band bent-over hip extension" marqué utilisé alors qu'elle ne l'avait
+// jamais réellement fait. Recalcule tout depuis les vraies exerciseSessions,
+// une seule fois par appareil (comme migrateFavoritesForAlreadyUsedExercises).
+async function migrateUsageCountsFromRealData() {
+  const FLAG = "carnet-muscu-migrated-usage-recompute-v1";
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const allExerciseSessions = await Db.getAllExerciseSessions();
+    const counts = new Map();
+    for (const es of allExerciseSessions) {
+      if (!es.libraryExerciseId) continue;
+      counts.set(es.libraryExerciseId, (counts.get(es.libraryExerciseId) || 0) + 1);
+    }
+    const all = await Db.getAllLibraryExercises();
+    for (const ex of all) {
+      const real = counts.get(ex.id) || 0;
+      if ((ex.usageCount || 0) !== real) {
+        ex.usageCount = real;
+        await Db.updateLibraryExercise(ex);
+      }
+    }
+  } catch (err) {
+    console.error("[carnet-muscu] échec de la migration des compteurs d'utilisation :", err);
+  }
+  localStorage.setItem(FLAG, "1");
+}
+
 async function init() {
   await Db.init();
   await migrateFavoritesForAlreadyUsedExercises();
+  await migrateUsageCountsFromRealData();
   seedPublicLibraryIfNeeded().then(() => {
     // Une fois l'import terminé, on rafraîchit la bibliothèque si elle est
     // affichée (premier lancement, avec connexion).
@@ -1858,7 +1929,9 @@ async function init() {
     const session = await Db.getSession(currentSessionId);
     if (!session) return;
     if (!confirm(`Supprimer la séance « ${session.title} » du ${formatDateFr(session.date)} ? Cette action est définitive.`)) return;
+    const affectedIds = (await Db.getExerciseSessionsForSession(currentSessionId)).map((e) => e.libraryExerciseId).filter(Boolean);
     await Db.deleteSession(currentSessionId);
+    for (const id of new Set(affectedIds)) await recomputeLibraryUsageCount(id);
     await renderJournal();
     goTo("journal");
   });

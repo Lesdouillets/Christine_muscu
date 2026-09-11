@@ -9,8 +9,9 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v18";
+const CACHE_NAME = "carnet-muscu-v19";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
+// (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 const APP_SHELL = [
   "./",
   "./index.html",
