@@ -946,6 +946,15 @@ function openLibraryDetail(ex) {
     favBtn.classList.toggle("on", !!ex.favorite);
     renderLibrary(document.getElementById("library-search").value);
   };
+  // Suppression de la bibliothèque (à la demande de Christine, pour nettoyer
+  // les exercices créés en double ou par erreur). L'historique des séances
+  // déjà faites avec cet exercice n'est pas touché - voir Db.deleteLibraryExercise.
+  document.getElementById("lib-detail-delete-btn").onclick = async () => {
+    if (!confirm(`Supprimer « ${ex.name} » de la bibliothèque ? Les séances passées qui l'utilisent ne seront pas modifiées, mais tu ne pourras plus le retrouver ni le réutiliser tel quel.`)) return;
+    await Db.deleteLibraryExercise(ex.id);
+    closeLibraryDetail();
+    await renderLibrary(document.getElementById("library-search").value);
+  };
   document.getElementById("library-detail-modal").classList.add("open");
 }
 function closeLibraryDetail() {
@@ -988,7 +997,10 @@ async function confirmAddLibraryExercise() {
     gif = { kind: "file", value: libNewGifFileDataUrl };
   }
   try {
-    await Db.addLibraryExercise({ name, type, gif, bodyPart: "", equipment: "", target: "", instructionsFr: "" });
+    // Favori par défaut ici aussi, pour la même raison que côté séance : sinon
+    // l'exercice n'apparaît plus dans la modale d'ajout (filtrée sur les
+    // favoris par défaut) tant qu'on ne l'a pas favorisé à la main.
+    await Db.addLibraryExercise({ name, type, gif, bodyPart: "", equipment: "", target: "", instructionsFr: "", favorite: true });
     closeLibraryAddModal();
     await renderLibrary(document.getElementById("library-search").value);
   } catch (err) {
@@ -1240,7 +1252,12 @@ async function confirmAddExerciseFromModal() {
     } else if (newExerciseGifKind === "file" && newExerciseGifFileDataUrl) {
       gif = { kind: "file", value: newExerciseGifFileDataUrl };
     }
-    const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif });
+    // Mis en favori automatiquement : comme la modale d'ajout filtre
+    // maintenant par défaut sur les favoris, un exercice tout juste créé
+    // (donc pas encore favori) disparaissait de la liste dès la séance
+    // suivante et donnait l'impression de ne pas avoir été enregistré -
+    // bug remonté par Christine.
+    const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif, favorite: true });
     if (swapTargetExerciseSessionId) {
       await swapExerciseInSession(swapTargetExerciseSessionId, libEx, newExerciseReps);
       return;

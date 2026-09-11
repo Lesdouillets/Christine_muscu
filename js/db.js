@@ -248,6 +248,21 @@ const Db = {
     });
   },
 
+  // Supprime un exercice de la bibliothèque (à la demande de Christine, pour
+  // nettoyer des exercices créés par erreur ou en double). L'historique des
+  // séances passées n'est pas touché : chaque exerciseSession garde son
+  // propre name/type déjà enregistrés, donc rien ne disparaît des séances
+  // déjà faites - seul le lien vers cet exercice de bibliothèque est perdu.
+  async deleteLibraryExercise(id) {
+    const db = this._db;
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["library"], "readwrite");
+      t.objectStore("library").delete(id);
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+  },
+
   async countLibraryExercises() {
     const db = this._db;
     return new Promise((resolve, reject) => {

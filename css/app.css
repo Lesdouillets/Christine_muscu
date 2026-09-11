@@ -174,7 +174,7 @@ button{font-family:inherit;}
 
 .exo-actions-row{display:flex;gap:8px;}
 .exo-action-btn{flex:1;background:none;border:1px solid var(--line);color:var(--muted);border-radius:11px;padding:9px;font-size:.8rem;font-weight:600;cursor:pointer;}
-.exo-action-btn.exo-action-danger{color:var(--warn);border-color:var(--warn-bg);}
+.exo-action-btn.exo-action-danger,.ghost-btn.exo-action-danger{color:var(--warn);border-color:var(--warn-bg);}
 
 .weight-block{display:flex;flex-direction:column;gap:6px;}
 .seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px;flex-wrap:wrap;}

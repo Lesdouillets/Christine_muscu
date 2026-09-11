@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v8";
+const CACHE_NAME = "carnet-muscu-v9";
 const APP_SHELL = [
   "./",
   "./index.html",
