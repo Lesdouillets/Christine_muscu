@@ -1823,6 +1823,16 @@ async function init() {
     e.target.value = ""; // pour pouvoir réimporter le même fichier plus tard si besoin
     if (file) await importBackup(file);
   });
+  // La synchronisation est maintenant dans une modale (bouton ⇅ en haut à
+  // droite du journal) plutôt qu'affichée en permanence à l'écran, à la
+  // demande de Christine ("c'est trop présent").
+  on("open-sync-modal-btn", "click", () => {
+    renderSyncSection();
+    document.getElementById("sync-modal").classList.add("open");
+  });
+  on("close-sync-modal-btn", "click", () => {
+    document.getElementById("sync-modal").classList.remove("open");
+  });
   renderSyncSection();
   on("sync-create-code-btn", "click", () => {
     setSyncCode(generateSyncCode());

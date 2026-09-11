@@ -28,6 +28,10 @@ button{font-family:inherit;}
 .appbar h1,.appbar h2{font-family:var(--font-display);font-weight:600;font-size:1.5rem;margin:0;color:var(--ink);text-transform:uppercase;letter-spacing:.02em;}
 .appbar .sub{color:var(--muted);font-size:.78rem;margin-top:1px;}
 .back-btn{background:var(--surface-2);border:1px solid var(--line);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer;flex-shrink:0;}
+/* Bouton en haut à droite de l'appbar (ex. ouvrir la synchronisation) - a la
+   demande de Christine, pour ne pas occuper en permanence de la place dans
+   l'ecran journal comme le faisait l'ancienne section fixe. */
+.appbar-btn{margin-left:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer;flex-shrink:0;font-size:1.05rem;line-height:1;}
 
 .stat-row{display:flex;gap:8px;padding:0 16px 8px;}
 .stat-tile{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:11px;display:flex;flex-direction:column;gap:2px;}
@@ -66,7 +70,6 @@ button{font-family:inherit;}
    CSS, c'est ce qui avait causé le bug du formulaire "nouvel exercice" qui
    restait visible malgré [hidden]. Ne pas ajouter de règle display sur un id
    togglé sans son override [hidden]. */
-.sync-section{display:flex;flex-direction:column;gap:8px;margin:4px 16px 16px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);}
 .sync-hint{font-size:.76rem;color:var(--muted);margin:0;}
 .sync-code-row{display:flex;align-items:center;gap:8px;}
 .sync-code-row code{flex:1;font-size:.78rem;padding:8px 10px;background:var(--bg);border-radius:8px;word-break:break-all;}

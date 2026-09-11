@@ -17,7 +17,10 @@
   <!-- ===== JOURNAL ===== -->
   <section class="view active" id="view-journal">
     <div class="statusbar-spacer"></div>
-    <div class="appbar"><h1>Carnet de muscu de Christine</h1></div>
+    <div class="appbar">
+      <h1>Carnet de muscu de Christine</h1>
+      <button class="appbar-btn" id="open-sync-modal-btn" title="Synchronisation entre appareils" aria-label="Synchronisation entre appareils">⇅</button>
+    </div>
     <div class="stat-row">
       <div class="stat-tile"><span class="n" id="stat-month">0</span><span class="l">séances / mois</span></div>
       <div class="stat-tile"><span class="n" id="stat-record">—</span><span class="l">record</span></div>
@@ -40,33 +43,6 @@
       <input type="file" id="import-file-input" accept="application/json" hidden>
     </div>
 
-    <!-- Synchronisation cloud entre appareils (Android + Mac) - voir js/sync.js -->
-    <div class="sync-section" id="sync-section">
-      <span class="field-label">Synchronisation entre appareils</span>
-      <div id="sync-setup">
-        <p class="sync-hint">Pas encore configurée sur cet appareil.</p>
-        <button class="ghost-btn" id="sync-create-code-btn">Créer un code de synchronisation</button>
-        <button class="ghost-btn" id="sync-enter-code-btn">J'ai déjà un code (autre appareil)</button>
-      </div>
-      <div id="sync-enter-code-field" class="field" style="margin:0;" hidden>
-        <input type="text" id="sync-code-input" placeholder="colle ton code ici" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <div class="lib-detail-rename-actions">
-          <button class="primary-btn" id="sync-confirm-code-btn">Valider</button>
-          <button class="ghost-btn" id="sync-cancel-code-btn">Annuler</button>
-        </div>
-      </div>
-      <div id="sync-active" hidden>
-        <p class="sync-hint">Code actif sur cet appareil (à copier sur ton autre appareil) :</p>
-        <div class="sync-code-row">
-          <code id="sync-code-display"></code>
-          <button class="ghost-btn" id="sync-copy-code-btn">Copier</button>
-        </div>
-        <button class="primary-btn" id="sync-push-btn">⭱ Sauvegarder dans le cloud</button>
-        <button class="ghost-btn" id="sync-pull-btn">⭳ Récupérer depuis le cloud</button>
-        <p class="sync-hint" id="sync-last-label"></p>
-        <button class="ghost-btn exo-action-danger" id="sync-forget-btn">Oublier ce code sur cet appareil</button>
-      </div>
-    </div>
     <div class="bottomnav">
       <button class="navitem" data-nav="journal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
@@ -323,6 +299,40 @@
     </div>
     <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
     <button class="ghost-btn exo-action-danger" id="lib-detail-delete-btn">Supprimer de la bibliothèque</button>
+  </div>
+</div>
+
+<!-- ===== Modale : synchronisation cloud entre appareils (Android + Mac) - voir js/sync.js =====
+     Déplacée depuis le bas de l'écran journal (à la demande de Christine : la
+     section prenait trop de place en permanence) vers cette modale, ouverte
+     par le bouton ⇅ en haut à droite de l'appbar. -->
+<div class="modal-backdrop" id="sync-modal">
+  <div class="modal">
+    <h3>Synchronisation entre appareils</h3>
+    <div id="sync-setup">
+      <p class="sync-hint">Pas encore configurée sur cet appareil.</p>
+      <button class="ghost-btn" id="sync-create-code-btn">Créer un code de synchronisation</button>
+      <button class="ghost-btn" id="sync-enter-code-btn">J'ai déjà un code (autre appareil)</button>
+    </div>
+    <div id="sync-enter-code-field" class="field" style="margin:0;" hidden>
+      <input type="text" id="sync-code-input" placeholder="colle ton code ici" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="sync-confirm-code-btn">Valider</button>
+        <button class="ghost-btn" id="sync-cancel-code-btn">Annuler</button>
+      </div>
+    </div>
+    <div id="sync-active" hidden>
+      <p class="sync-hint">Code actif sur cet appareil (à copier sur ton autre appareil) :</p>
+      <div class="sync-code-row">
+        <code id="sync-code-display"></code>
+        <button class="ghost-btn" id="sync-copy-code-btn">Copier</button>
+      </div>
+      <button class="primary-btn" id="sync-push-btn">⭱ Sauvegarder dans le cloud</button>
+      <button class="ghost-btn" id="sync-pull-btn">⭳ Récupérer depuis le cloud</button>
+      <p class="sync-hint" id="sync-last-label"></p>
+      <button class="ghost-btn exo-action-danger" id="sync-forget-btn">Oublier ce code sur cet appareil</button>
+    </div>
+    <button class="ghost-btn" id="close-sync-modal-btn">Fermer</button>
   </div>
 </div>
 
