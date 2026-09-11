@@ -102,6 +102,27 @@ button{font-family:inherit;}
 .result-item-withgif img{width:56px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0;}
 .session-delete-btn{margin:6px 16px 0;}
 
+/* ---------- Progrès ---------- */
+#progress-list-wrap,#progress-detail-wrap{display:flex;flex-direction:column;flex:1;min-height:0;}
+.progress-item{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;text-align:left;}
+.progress-item:hover{border-color:var(--accent);}
+.progress-item-name{font-weight:600;font-size:.88rem;color:var(--ink);}
+.progress-item-count{font-size:.72rem;color:var(--muted);flex-shrink:0;white-space:nowrap;}
+
+.progress-record{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:2px;}
+.progress-record .l{font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.progress-record .n{font-family:var(--font-display);font-weight:600;font-size:1.5rem;color:var(--accent);font-variant-numeric:tabular-nums;}
+
+.progress-chart-wrap{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 8px 6px;}
+.progress-chart-wrap svg{display:block;width:100%;height:auto;overflow:visible;}
+.progress-tooltip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font-size:.72rem;font-weight:600;padding:5px 9px;border-radius:8px;white-space:nowrap;transform:translate(-50%,-100%);top:0;left:0;opacity:0;transition:opacity .1s ease;font-family:'IBM Plex Mono';}
+.progress-tooltip.show{opacity:1;}
+.progress-table-toggle{align-self:flex-start;background:none;border:none;color:var(--accent);font-size:.78rem;font-weight:600;cursor:pointer;padding:0;text-align:left;}
+.progress-table{width:100%;border-collapse:collapse;font-size:.8rem;}
+.progress-table th{text-align:left;color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;font-weight:600;padding:6px 4px;border-bottom:1px solid var(--line);}
+.progress-table td{padding:7px 4px;border-bottom:1px solid var(--line);color:var(--ink);font-family:'IBM Plex Mono';}
+.progress-empty{margin:24px 16px;text-align:center;color:var(--muted);font-size:.85rem;line-height:1.6;}
+
 .acc-list{display:flex;flex-direction:column;gap:8px;}
 .acc-item{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;overflow:hidden;}
 .acc-item.open{border-color:var(--accent);}
