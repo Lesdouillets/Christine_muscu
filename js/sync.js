@@ -51,6 +51,8 @@ function setSyncCode(code) {
   localStorage.setItem(SYNC_CODE_KEY, code);
 }
 function forgetSyncCode() {
+  stopRealtimeSync();
+  Db._onWrite = null;
   localStorage.removeItem(SYNC_CODE_KEY);
   localStorage.removeItem(SYNC_LAST_KEY);
 }
@@ -73,6 +75,99 @@ function generateSyncCode() {
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
+
+// ---------- Synchronisation automatique en temps réel ----------
+// À la demande de Christine (10/09/2026) : plus besoin de cliquer sur les
+// boutons pour que ce soit à jour. Deux mécanismes complémentaires :
+//  - un envoi automatique (débouncé) dès qu'une donnée locale change,
+//    branché via Db._onWrite (voir js/db.js) ;
+//  - une écoute en direct (Firestore onSnapshot) du document cloud, qui
+//    fusionne automatiquement tout changement fait sur l'autre appareil.
+// Uniquement pendant que l'appli est ouverte au premier plan (pas en
+// arrière-plan) - c'est ce que Christine a demandé, et ça évite de garder
+// une connexion réseau ouverte pour rien quand elle n'utilise pas l'appli.
+
+let realtimeUnsubscribe = null;
+let pushDebounceTimer = null;
+
+// Empêche la fusion d'un changement reçu du cloud de re-déclencher elle-même
+// un envoi automatique (qui renverrait aussitôt exactement ce qu'on vient de
+// recevoir) : le hook Db._onWrite est simplement coupé pendant la fusion,
+// puis restauré - voir mergeBackupData dans app.js.
+function scheduleAutoPush() {
+  const code = getSyncCode();
+  if (!code) return;
+  clearTimeout(pushDebounceTimer);
+  // Un léger délai regroupe plusieurs modifications rapprochées (ex. saisir
+  // plusieurs séries d'affilée) en un seul envoi, au lieu d'un envoi par
+  // clic.
+  pushDebounceTimer = setTimeout(async () => {
+    try {
+      await pushBackupToCloud();
+    } catch (err) {
+      // Erreur silencieuse ici (pas d'alerte) : une synchro automatique en
+      // arrière-plan de la saisie ne doit pas interrompre Christine en
+      // pleine séance. Le bouton manuel "Sauvegarder" reste disponible et
+      // affichera l'erreur si besoin.
+      console.error("[carnet-muscu] échec de la synchro automatique :", err);
+    }
+    renderSyncSection();
+  }, 4000);
+}
+
+function startRealtimeSync() {
+  const code = getSyncCode();
+  if (!code) return;
+  stopRealtimeSync();
+  if (typeof firebase === "undefined") return; // pas de réseau/CDN bloqué
+  try {
+    realtimeUnsubscribe = getFirestore()
+      .collection("syncs")
+      .doc(code)
+      .onSnapshot(
+        async (snap) => {
+          // hasPendingWrites = c'est notre propre envoi qui nous revient en
+          // écho (Firestore notifie l'auteur en local avant confirmation
+          // serveur) - rien à fusionner, on l'a déjà.
+          if (snap.metadata.hasPendingWrites || !snap.exists) return;
+          try {
+            // mergeBackupData coupe elle-même le hook Db._onWrite le temps de
+            // la fusion (voir app.js) - pas besoin de le refaire ici.
+            await mergeBackupData(snap.data());
+            setLastSyncNow();
+            renderSyncSection();
+          } catch (err) {
+            console.error("[carnet-muscu] échec de la fusion en temps réel :", err);
+          }
+        },
+        (err) => {
+          console.error("[carnet-muscu] écoute temps réel interrompue :", err);
+        }
+      );
+  } catch (err) {
+    console.error("[carnet-muscu] impossible de démarrer la synchro en temps réel :", err);
+  }
+}
+
+function stopRealtimeSync() {
+  if (realtimeUnsubscribe) {
+    realtimeUnsubscribe();
+    realtimeUnsubscribe = null;
+  }
+  clearTimeout(pushDebounceTimer);
+}
+
+// Coupe l'écoute temps réel quand l'appli passe en arrière-plan (onglet
+// caché / appli minimisée sur le téléphone), la relance quand elle revient
+// au premier plan - conformément à ce que Christine a demandé ("uniquement
+// quand l'app est active"). Sans code configuré, ces appels ne font rien.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    stopRealtimeSync();
+  } else {
+    startRealtimeSync();
+  }
+});
 
 // Construit la charge utile a envoyer au cloud, en laissant de cote le
 // catalogue integre a l'appli (data/exercises-library.json, ~1300 exercices

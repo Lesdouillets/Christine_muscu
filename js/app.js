@@ -1563,38 +1563,51 @@ async function exportSessions() {
 // autre appareil) arriver correctement sans perdre un changement plus récent
 // fait ici. Retourne les compteurs, à afficher par l'appelant.
 async function mergeBackupData(data) {
-  const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
-  const library = Array.isArray(data.library) ? data.library : [];
+  // On coupe temporairement le hook de synchro automatique (voir Db._onWrite
+  // dans js/db.js et js/sync.js) le temps de la fusion : sans ça, chaque
+  // écriture faite ICI en train de recopier des données déjà reçues du
+  // cloud programmerait un nouvel envoi automatique vers le cloud - un
+  // aller-retour inutile (et, avec l'écoute en temps réel, potentiellement
+  // une boucle). Couvre tous les appelants (import fichier, bouton
+  // "Récupérer", écoute en temps réel), pas seulement l'un d'eux.
+  const savedWriteHook = Db._onWrite;
+  Db._onWrite = null;
+  try {
+    const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
+    const library = Array.isArray(data.library) ? data.library : [];
 
-  let sessionCount = 0, exerciseCount = 0;
-  for (const s of sessions) {
-    if (!s || !s.id) continue;
-    const { exercises, ...sessionFields } = s;
-    await Db.updateSession(sessionFields);
-    sessionCount++;
-    for (const ex of exercises || []) {
-      if (!ex || !ex.id) continue;
-      await Db.updateExerciseSession(ex);
-      exerciseCount++;
+    let sessionCount = 0, exerciseCount = 0;
+    for (const s of sessions) {
+      if (!s || !s.id) continue;
+      const { exercises, ...sessionFields } = s;
+      await Db.updateSession(sessionFields);
+      sessionCount++;
+      for (const ex of exercises || []) {
+        if (!ex || !ex.id) continue;
+        await Db.updateExerciseSession(ex);
+        exerciseCount++;
+      }
     }
-  }
-  let libraryCount = 0, librarySkippedCount = 0;
-  for (const libEx of library) {
-    if (!libEx || !libEx.id) continue;
-    const local = await Db.getLibraryExercise(libEx.id);
-    if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
-      librarySkippedCount++;
-      continue;
+    let libraryCount = 0, librarySkippedCount = 0;
+    for (const libEx of library) {
+      if (!libEx || !libEx.id) continue;
+      const local = await Db.getLibraryExercise(libEx.id);
+      if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
+        librarySkippedCount++;
+        continue;
+      }
+      await Db.updateLibraryExercise(libEx);
+      libraryCount++;
     }
-    await Db.updateLibraryExercise(libEx);
-    libraryCount++;
-  }
 
-  await renderJournal(document.getElementById("journal-search").value);
-  if (document.getElementById("view-library").classList.contains("active")) {
-    await renderLibrary(document.getElementById("library-search").value);
+    await renderJournal(document.getElementById("journal-search").value);
+    if (document.getElementById("view-library").classList.contains("active")) {
+      await renderLibrary(document.getElementById("library-search").value);
+    }
+    return { sessionCount, exerciseCount, libraryCount, librarySkippedCount, sessionsSeen: sessions.length, librarySeen: library.length };
+  } finally {
+    Db._onWrite = savedWriteHook;
   }
-  return { sessionCount, exerciseCount, libraryCount, librarySkippedCount, sessionsSeen: sessions.length, librarySeen: library.length };
 }
 
 async function importBackup(file) {
@@ -1833,11 +1846,29 @@ async function init() {
   on("close-sync-modal-btn", "click", () => {
     document.getElementById("sync-modal").classList.remove("open");
   });
+  // Synchro automatique dès qu'un code est déjà configuré au chargement de
+  // l'appli (à la demande de Christine : "toujours à jour", en temps réel,
+  // tant que l'appli est ouverte au premier plan - voir js/sync.js).
+  if (getSyncCode()) {
+    Db._onWrite = scheduleAutoPush;
+    startRealtimeSync();
+  }
   renderSyncSection();
-  on("sync-create-code-btn", "click", () => {
+  on("sync-create-code-btn", "click", async () => {
     setSyncCode(generateSyncCode());
+    Db._onWrite = scheduleAutoPush;
+    startRealtimeSync();
     renderSyncSection();
-    alert("Code créé. Copie-le et colle-le dans « J'ai déjà un code » sur ton autre appareil, puis fais « Sauvegarder dans le cloud » ici pour envoyer tes données existantes.");
+    // Envoi immédiat des données déjà présentes sur cet appareil, pour que
+    // l'autre appareil trouve tout de suite quelque chose en collant le code
+    // - avant, il fallait cliquer manuellement sur "Sauvegarder".
+    try {
+      await pushBackupToCloud();
+      renderSyncSection();
+    } catch (err) {
+      console.error("[carnet-muscu] échec de l'envoi initial :", err);
+    }
+    alert("Code créé et tes données envoyées dans le cloud. Colle ce code dans « J'ai déjà un code » sur ton autre appareil : la synchronisation se fera ensuite automatiquement, tant que l'appli est ouverte sur les deux appareils.");
   });
   on("sync-enter-code-btn", "click", () => {
     document.getElementById("sync-code-input").value = "";
@@ -1851,6 +1882,8 @@ async function init() {
     const code = document.getElementById("sync-code-input").value.trim();
     if (!code) return;
     setSyncCode(code);
+    Db._onWrite = scheduleAutoPush;
+    startRealtimeSync();
     renderSyncSection();
   });
   on("sync-copy-code-btn", "click", async () => {

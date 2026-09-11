@@ -45,6 +45,26 @@ function uid() {
 }
 
 const Db = {
+  // Point d'accroche pour la synchronisation cloud automatique (voir
+  // js/sync.js) : app.js branche ici une fonction appelée après chaque
+  // écriture "utile" (séances, exercices de bibliothèque), pour déclencher
+  // un envoi automatique vers le cloud sans que Christine ait à cliquer sur
+  // un bouton. Reste `null` tant qu'aucun code de synchronisation n'est
+  // configuré. Volontairement absent de bulkAddLibraryExercises : l'import
+  // initial du catalogue (1300+ exercices) ne doit jamais déclencher d'envoi
+  // au cloud (voir buildCloudSyncPayload dans sync.js, qui l'exclut de toute
+  // façon, mais autant ne pas programmer un envoi inutile).
+  _onWrite: null,
+  _notifyWrite() {
+    if (this._onWrite) {
+      try {
+        this._onWrite();
+      } catch (err) {
+        console.error("[carnet-muscu] hook de synchro en échec :", err);
+      }
+    }
+  },
+
   async init() {
     this._db = await openDb();
     return this._db;
@@ -59,6 +79,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
     return record;
   },
 
@@ -70,6 +91,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   async getAllSessions() {
@@ -102,6 +124,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
     return record;
   },
 
@@ -113,6 +136,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   // Retire un seul exercice d'une séance (contrairement à deleteSession qui
@@ -126,6 +150,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   async deleteSession(sessionId) {
@@ -139,6 +164,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   // Tout l'historique d'un exercice de bibliothèque donné, toutes séances
@@ -207,6 +233,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
     return record;
   },
 
@@ -236,6 +263,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   async getLibraryExercise(id) {
@@ -261,6 +289,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    this._notifyWrite();
   },
 
   async countLibraryExercises() {
