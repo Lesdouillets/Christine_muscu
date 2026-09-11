@@ -230,6 +230,7 @@
           <option value="barre">Barre</option>
           <option value="halteres">Haltères</option>
           <option value="poids_du_corps">Poids du corps</option>
+          <option value="elastique">Élastique</option>
         </select>
       </div>
       <div class="field" style="margin:0;">
@@ -239,6 +240,20 @@
           <span class="num" id="new-exercise-reps-value">10</span>
           <button type="button" id="new-exercise-reps-plus">+</button>
         </div>
+      </div>
+      <div class="field" style="margin:0;" id="new-exercise-gif-kind-field">
+        <span class="field-label">Gif de démonstration</span>
+        <div class="seg" id="new-exercise-gif-kind">
+          <button type="button" data-val="link" class="sel">Lien</button>
+          <button type="button" data-val="file">Depuis mon téléphone</button>
+          <button type="button" data-val="none">Aucun</button>
+        </div>
+      </div>
+      <div class="field" id="new-exercise-gif-link-field" style="margin:0;">
+        <input type="url" id="new-exercise-gif-link" placeholder="https://…">
+      </div>
+      <div class="field" id="new-exercise-gif-file-field" style="margin:0;" hidden>
+        <input type="file" id="new-exercise-gif-file" accept="image/gif,image/*">
       </div>
       <button class="primary-btn" id="confirm-add-exercise-btn"><span id="confirm-add-exercise-verb">Ajouter</span> « <span id="new-exercise-name-display"></span> »</button>
     </div>
@@ -264,6 +279,10 @@
     <button class="lib-detail-fav" id="lib-detail-fav-btn">★ Ajouter aux favoris</button>
     <div class="lib-detail-meta" id="lib-detail-meta"></div>
     <div class="lib-detail-instr" id="lib-detail-instr"></div>
+    <div class="field" style="margin:0;">
+      <span class="field-label">Note personnelle (visible pendant les séances)</span>
+      <textarea id="lib-detail-note-input" rows="2" placeholder="ex. bien garder le dos droit, éviter si douleur épaule…"></textarea>
+    </div>
     <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
   </div>
 </div>
@@ -282,6 +301,7 @@
         <option value="barre">Barre</option>
         <option value="halteres">Haltères</option>
         <option value="poids_du_corps">Poids du corps</option>
+        <option value="elastique">Élastique</option>
         <option value="inconnu">Autre / à classer</option>
       </select>
     </div>

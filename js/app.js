@@ -329,6 +329,10 @@ async function buildExerciseCard(session, ex, last) {
       <span class="acc-sub">${ex.targetReps} reps · ${typeLabel(ex.type)}</span>
     </div>
     <div class="acc-right">
+      ${libExForName ? `
+      <button type="button" class="lib-fav-btn acc-fav-btn${libExForName.favorite ? " on" : ""}" title="Marquer comme favori" aria-label="Marquer comme favori">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="${libExForName.favorite ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </button>` : ""}
       <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
     </div>
   `;
@@ -337,6 +341,20 @@ async function buildExerciseCard(session, ex, last) {
     document.querySelectorAll(".acc-item.open").forEach((i) => i.classList.remove("open"));
     if (!wasOpen) item.classList.add("open");
   });
+  // Favoris directement depuis la séance (à la demande de Christine) - agit
+  // sur l'exercice de bibliothèque, comme le favori de la bibliothèque
+  // elle-même : les deux se reflètent l'un l'autre.
+  const favBtnInCard = head.querySelector(".acc-fav-btn");
+  if (favBtnInCard && libExForName) {
+    favBtnInCard.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      libExForName.favorite = !libExForName.favorite;
+      libExForName.updatedAt = Date.now();
+      await Db.updateLibraryExercise(libExForName);
+      favBtnInCard.classList.toggle("on", libExForName.favorite);
+      favBtnInCard.querySelector("svg").setAttribute("fill", libExForName.favorite ? "currentColor" : "none");
+    });
+  }
 
   const panel = document.createElement("div");
   panel.className = "acc-panel";
@@ -360,6 +378,25 @@ async function buildExerciseCard(session, ex, last) {
     `;
   }
   body.appendChild(gifRow);
+
+  // Note personnelle sur l'exercice, modifiable depuis la séance ou la
+  // bibliothèque (à la demande de Christine) - stockée sur l'exercice de
+  // bibliothèque, donc partagée entre les deux vues.
+  if (libExForName) {
+    const noteWrap = document.createElement("div");
+    noteWrap.className = "exo-note";
+    noteWrap.innerHTML = `
+      <span class="field-label">Note</span>
+      <textarea class="exo-note-input" rows="2" placeholder="Une info à te rappeler...">${escapeHtml(libExForName.note || "")}</textarea>
+    `;
+    noteWrap.querySelector("textarea").addEventListener("click", (e) => e.stopPropagation());
+    noteWrap.querySelector("textarea").addEventListener("change", async (e) => {
+      libExForName.note = e.target.value;
+      libExForName.updatedAt = Date.now();
+      await Db.updateLibraryExercise(libExForName);
+    });
+    body.appendChild(noteWrap);
+  }
 
   // historique + suggestion (section 6 de la spec : "noté trop léger → essaie
   // 2×15 aujourd'hui")
@@ -440,7 +477,13 @@ async function buildExerciseCard(session, ex, last) {
 }
 
 function typeLabel(type) {
-  return { barre: "barre", halteres: "haltères", poids_du_corps: "poids du corps", inconnu: "à classer" }[type] || type;
+  return { barre: "barre", halteres: "haltères", poids_du_corps: "poids du corps", elastique: "élastique", inconnu: "à classer" }[type] || type;
+}
+// Types sans charge chiffrée à saisir tour par tour (juste le ressenti) -
+// l'élastique s'ajoute au poids du corps à la demande de Christine : la
+// résistance d'une bande n'est pas un poids en kg qu'on peut suivre pareil.
+function isWeightlessType(type) {
+  return type === "poids_du_corps" || type === "elastique";
 }
 function feelingLabel(f) {
   return { light: "trop léger", good: "bien", heavy: "trop lourd" }[f] || "";
@@ -477,7 +520,7 @@ function suggestNextWeight(type, weight, feeling) {
     const prev = idx > 0 ? WEIGHT_STEPS[idx - 1] : null;
     return prev !== null ? `essaie ${prev} kg par main aujourd'hui` : `allège encore aujourd'hui`;
   }
-  if (type === "poids_du_corps") {
+  if (isWeightlessType(type)) {
     return feeling === "light" ? "essaie plus de répétitions aujourd'hui" : "réduis les répétitions si besoin aujourd'hui";
   }
   return null;
@@ -488,6 +531,20 @@ function roundWeight(ex, i) {
 }
 function roundFeeling(ex, i) {
   return (ex.rounds && ex.rounds[i] && ex.rounds[i].feeling) || null;
+}
+
+// Si un tour n'a pas de poids saisi, on considère que c'est le même que le
+// dernier tour renseigné avant lui (à la demande de Christine) - pas
+// forcément le tour juste avant : remonte jusqu'au premier tour qui a un
+// poids. Avant ce correctif, seuls le tour precedent et le tout premier
+// tour etaient consultes, donc un 4e tour vide "sautait" le poids du 2e
+// tour si le 3e etait lui aussi vide.
+function lastKnownWeight(ex, beforeIndex) {
+  for (let i = beforeIndex - 1; i >= 0; i--) {
+    const w = roundWeight(ex, i);
+    if (w) return w;
+  }
+  return null;
 }
 
 async function saveRound(ex, index, patch) {
@@ -523,10 +580,10 @@ function buildRoundFull(session, ex, index) {
   label.textContent = "Tour 1";
   row.appendChild(label);
 
-  if (ex.type === "poids_du_corps") {
+  if (isWeightlessType(ex.type)) {
     const note = document.createElement("div");
     note.className = "bodyweight-note";
-    note.textContent = "Poids du corps - pas de charge à saisir.";
+    note.textContent = ex.type === "elastique" ? "Élastique - pas de charge à saisir." : "Poids du corps - pas de charge à saisir.";
     row.appendChild(note);
   } else {
     const wb = document.createElement("div");
@@ -599,6 +656,11 @@ function wireWeightBlock(wb, ex, index, currentWeight) {
         w[role] = parseFloat(btn.dataset.val);
         await saveRound(ex, index, { weight: w });
         updateTotal(w);
+        // Les tours suivants (non renseignés) affichent "comme avant" en
+        // héritant de ce poids - il faut reconstruire leurs pastilles pour
+        // que ça se voie tout de suite, sans attendre de refermer/rouvrir
+        // la carte.
+        await refreshCompactRoundsFor(ex.id);
       });
     });
   });
@@ -611,8 +673,28 @@ function wireWeightBlock(wb, ex, index, currentWeight) {
       w[role] = parseFloat(input.value) || 0;
       await saveRound(ex, index, { weight: w });
       updateTotal(w);
+      await refreshCompactRoundsFor(ex.id);
     });
   });
+}
+
+// Reconstruit uniquement les pastilles de tours compacts (2e tour et
+// suivants) d'une carte d'exercice donnée, sans tout re-render/refermer la
+// carte comme le ferait renderExerciseList() - plus léger et ça ne fait pas
+// "sauter" l'écran pendant la saisie du 1er tour.
+async function refreshCompactRoundsFor(exerciseSessionId) {
+  const item = document.querySelector(`.acc-item[data-exercise-session-id="${exerciseSessionId}"]`);
+  if (!item) return;
+  const compactWrap = item.querySelector(".rounds-compact-wrap");
+  if (!compactWrap) return;
+  const session = await Db.getSession(currentSessionId);
+  const all = await Db.getExerciseSessionsForSession(currentSessionId);
+  const ex = all.find((e) => e.id === exerciseSessionId);
+  if (!ex || !session) return;
+  compactWrap.innerHTML = "";
+  for (let r = 1; r < session.tours; r++) {
+    compactWrap.appendChild(buildRoundCompact(session, ex, r));
+  }
 }
 
 function buildRoundCompact(session, ex, index) {
@@ -625,13 +707,16 @@ function buildRoundCompact(session, ex, index) {
   label.textContent = `Tour ${index + 1}`;
   top.appendChild(label);
 
-  if (ex.type !== "poids_du_corps") {
+  if (!isWeightlessType(ex.type)) {
     const chip = document.createElement("button");
     chip.className = "rc-weight";
-    const w = roundWeight(ex, index) || roundWeight(ex, index - 1) || roundWeight(ex, 0);
-    chip.textContent = (w ? weightLabel(ex.type, w) : "définir le poids") + " ✎";
+    const explicitWeight = roundWeight(ex, index);
+    const w = explicitWeight || lastKnownWeight(ex, index);
+    chip.textContent = w
+      ? weightLabel(ex.type, w) + (explicitWeight ? "" : " (comme avant)") + " ✎"
+      : "définir le poids ✎";
     chip.addEventListener("click", async () => {
-      const current = roundWeight(ex, index) || roundWeight(ex, index - 1) || roundWeight(ex, 0);
+      const current = roundWeight(ex, index) || lastKnownWeight(ex, index);
       const promptVal = prompt("Nouveau poids total (kg) pour ce tour :", current ? (ex.type === "barre" ? current.bar + current.added * 2 : current.perHand) : "");
       if (promptVal === null) return;
       const val = parseFloat(promptVal);
@@ -645,6 +730,9 @@ function buildRoundCompact(session, ex, index) {
       }
       await saveRound(ex, index, { weight: w2 });
       chip.textContent = weightLabel(ex.type, w2) + " ✎";
+      // Les tours APRES celui-ci peuvent hériter de ce nouveau poids s'ils
+      // ne sont pas eux-mêmes renseignés - il faut les reconstruire aussi.
+      await refreshCompactRoundsFor(ex.id);
     });
     top.appendChild(chip);
   }
@@ -746,6 +834,9 @@ async function renderLibrary(filterText) {
   if (libraryEquipment) {
     results = results.filter((ex) => equipmentCategoryOf(ex) === libraryEquipment);
   }
+  // Ordre alphabétique par défaut (à la demande de Christine) - sauf pour
+  // le filtre "les plus utilisés" qui garde son propre tri par popularité.
+  results.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
   if (libraryQuickFilter === "favorites") {
     results = results.filter((ex) => ex.favorite);
   } else if (libraryQuickFilter === "used") {
@@ -815,6 +906,16 @@ function openLibraryDetail(ex) {
     .filter(Boolean)
     .join(" · ") || typeLabel(ex.type);
   document.getElementById("lib-detail-instr").textContent = ex.instructionsFr || "";
+  // Note personnelle (à la demande de Christine) : modifiable ici comme
+  // depuis une séance, mais elle ne sert vraiment que pendant les séances -
+  // pas affichée dans la grille de la bibliothèque.
+  const noteInput = document.getElementById("lib-detail-note-input");
+  noteInput.value = ex.note || "";
+  noteInput.onchange = async () => {
+    ex.note = noteInput.value;
+    ex.updatedAt = Date.now();
+    await Db.updateLibraryExercise(ex);
+  };
   document.getElementById("lib-detail-rename-field").hidden = true;
   document.getElementById("lib-detail-rename-btn").onclick = () => {
     document.getElementById("lib-detail-rename-input").value = ex.name;
@@ -886,9 +987,14 @@ async function confirmAddLibraryExercise() {
   } else if (libNewGifKind === "file" && libNewGifFileDataUrl) {
     gif = { kind: "file", value: libNewGifFileDataUrl };
   }
-  await Db.addLibraryExercise({ name, type, gif, bodyPart: "", equipment: "", target: "", instructionsFr: "" });
-  closeLibraryAddModal();
-  await renderLibrary(document.getElementById("library-search").value);
+  try {
+    await Db.addLibraryExercise({ name, type, gif, bodyPart: "", equipment: "", target: "", instructionsFr: "" });
+    closeLibraryAddModal();
+    await renderLibrary(document.getElementById("library-search").value);
+  } catch (err) {
+    console.error("[carnet-muscu] échec de l'ajout à la bibliothèque :", err);
+    alert("Impossible d'enregistrer cet exercice (" + (err && err.message ? err.message : "erreur inconnue") + "). Si tu avais choisi une photo/gif volumineux, réessaie avec un lien ou sans gif.");
+  }
 }
 
 // ---------- Ajouter un exercice à une séance ----------
@@ -898,6 +1004,10 @@ let newExerciseName = "";
 let modalCategory = null;
 let modalEquipment = null;
 let modalFavoritesOnly = false;
+// Gif choisi lors de la création d'un tout nouvel exercice depuis une séance
+// (à la demande de Christine, comme pour l'ajout depuis la bibliothèque).
+let newExerciseGifKind = "link";
+let newExerciseGifFileDataUrl = null;
 // Exercice de bibliothèque déjà existant en cours de sélection (on passe par
 // l'étape "répétitions" avant de l'ajouter, comme pour un exercice tout
 // neuf) - null quand on crée un exercice qui n'existe pas encore.
@@ -958,12 +1068,15 @@ function openExerciseModal() {
   document.getElementById("confirm-add-exercise-verb").textContent = "Ajouter";
   modalCategory = null;
   modalEquipment = null;
-  modalFavoritesOnly = false;
+  // Par défaut, on filtre sur les favoris à l'ouverture (à la demande de
+  // Christine) - on ajoute un exercice depuis une séance le plus souvent
+  // parmi les exos qu'on fait déjà régulièrement.
+  modalFavoritesOnly = true;
   buildModalChips();
   document.getElementById("modal-quickfilter-group").hidden = false;
   document.getElementById("modal-categories-group").hidden = false;
   document.getElementById("modal-equipment-group").hidden = false;
-  document.getElementById("modal-quickfilter").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
+  document.getElementById("modal-quickfilter").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "★ Favoris"));
   document.getElementById("modal-categories").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
   document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
   document.getElementById("new-exercise-reps-value").textContent = "10";
@@ -998,6 +1111,9 @@ async function searchExercisesInModal(query) {
   if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
   if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
   if (modalFavoritesOnly) results = results.filter((ex) => ex.favorite);
+  // Ordre alphabétique par défaut (à la demande de Christine), comme dans
+  // la bibliothèque.
+  results.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
   // Pendant la saisie, on cache les rangées de filtres pour laisser toute la
   // place aux résultats - sur téléphone le clavier prend déjà la moitié de
   // l'écran, inutile de rogner encore plus l'espace visible.
@@ -1035,6 +1151,15 @@ function openNewExerciseForm(name) {
   document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = false;
+  // Remise à zéro du choix de gif à chaque nouvel exercice créé depuis la séance.
+  newExerciseGifKind = "link";
+  newExerciseGifFileDataUrl = null;
+  document.getElementById("new-exercise-gif-link").value = "";
+  document.getElementById("new-exercise-gif-file").value = "";
+  document.querySelectorAll("#new-exercise-gif-kind button").forEach((b) => b.classList.toggle("sel", b.dataset.val === "link"));
+  document.getElementById("new-exercise-gif-link-field").hidden = false;
+  document.getElementById("new-exercise-gif-file-field").hidden = true;
+  document.getElementById("new-exercise-gif-kind-field").hidden = false;
   document.getElementById("new-exercise-form").hidden = false;
 }
 
@@ -1049,6 +1174,9 @@ function openReprsStepForExisting(libEx) {
   document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = true;
+  document.getElementById("new-exercise-gif-kind-field").hidden = true;
+  document.getElementById("new-exercise-gif-link-field").hidden = true;
+  document.getElementById("new-exercise-gif-file-field").hidden = true;
   document.getElementById("new-exercise-form").hidden = false;
 }
 
@@ -1089,22 +1217,39 @@ async function swapExerciseInSession(exerciseSessionId, libraryExercise, targetR
 }
 
 async function confirmAddExerciseFromModal() {
-  if (pendingExistingLibEx) {
-    if (swapTargetExerciseSessionId) {
-      await swapExerciseInSession(swapTargetExerciseSessionId, pendingExistingLibEx, newExerciseReps);
+  // Avant, une erreur ici (ex. un gif photo trop volumineux pour être
+  // enregistré) échouait en silence : le bouton ne faisait plus rien et
+  // Christine avait l'impression que « l'ajout d'un nouvel exercice ne
+  // marche pas », sans aucun message. On attrape maintenant l'erreur pour
+  // au moins la prévenir au lieu de rester bloquée sans explication.
+  try {
+    if (pendingExistingLibEx) {
+      if (swapTargetExerciseSessionId) {
+        await swapExerciseInSession(swapTargetExerciseSessionId, pendingExistingLibEx, newExerciseReps);
+        return;
+      }
+      await addExerciseToSession(pendingExistingLibEx, newExerciseReps);
       return;
     }
-    await addExerciseToSession(pendingExistingLibEx, newExerciseReps);
-    return;
+    if (!newExerciseName) return;
+    const type = document.getElementById("new-exercise-type").value;
+    let gif = null;
+    if (newExerciseGifKind === "link") {
+      const url = document.getElementById("new-exercise-gif-link").value.trim();
+      if (url) gif = { kind: "link", value: url };
+    } else if (newExerciseGifKind === "file" && newExerciseGifFileDataUrl) {
+      gif = { kind: "file", value: newExerciseGifFileDataUrl };
+    }
+    const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif });
+    if (swapTargetExerciseSessionId) {
+      await swapExerciseInSession(swapTargetExerciseSessionId, libEx, newExerciseReps);
+      return;
+    }
+    await addExerciseToSession(libEx, newExerciseReps);
+  } catch (err) {
+    console.error("[carnet-muscu] échec de l'ajout de l'exercice :", err);
+    alert("Impossible d'enregistrer cet exercice (" + (err && err.message ? err.message : "erreur inconnue") + "). Si tu avais choisi une photo/gif volumineux, réessaie avec un lien ou sans gif.");
   }
-  if (!newExerciseName) return;
-  const type = document.getElementById("new-exercise-type").value;
-  const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif: null });
-  if (swapTargetExerciseSessionId) {
-    await swapExerciseInSession(swapTargetExerciseSessionId, libEx, newExerciseReps);
-    return;
-  }
-  await addExerciseToSession(libEx, newExerciseReps);
 }
 
 // ---------- Progrès ----------
@@ -1185,7 +1330,7 @@ async function buildProgressSeries(libId) {
   for (const ex of exSessions) {
     const date = dateOf.get(ex.sessionId);
     if (!date) continue;
-    if (ex.type === "poids_du_corps") {
+    if (isWeightlessType(ex.type)) {
       points.push({ date, value: ex.targetReps, unit: "reps" });
       continue;
     }
@@ -1507,6 +1652,24 @@ async function init() {
     if (!file) { libNewGifFileDataUrl = null; return; }
     const reader = new FileReader();
     reader.onload = () => { libNewGifFileDataUrl = reader.result; };
+    reader.readAsDataURL(file);
+  });
+  // Même principe pour le gif d'un tout nouvel exercice créé depuis une
+  // séance (à la demande de Christine) - jusqu'ici on ne pouvait choisir un
+  // gif qu'en passant par la bibliothèque.
+  document.querySelectorAll("#new-exercise-gif-kind button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      newExerciseGifKind = btn.dataset.val;
+      document.querySelectorAll("#new-exercise-gif-kind button").forEach((b) => b.classList.toggle("sel", b === btn));
+      document.getElementById("new-exercise-gif-link-field").hidden = newExerciseGifKind !== "link";
+      document.getElementById("new-exercise-gif-file-field").hidden = newExerciseGifKind !== "file";
+    });
+  });
+  on("new-exercise-gif-file", "change", (e) => {
+    const file = e.target.files[0];
+    if (!file) { newExerciseGifFileDataUrl = null; return; }
+    const reader = new FileReader();
+    reader.onload = () => { newExerciseGifFileDataUrl = reader.result; };
     reader.readAsDataURL(file);
   });
   on("add-exercise-btn", "click", openExerciseModal);
