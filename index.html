@@ -22,7 +22,7 @@
       <button class="appbar-btn" id="open-sync-modal-btn" title="Synchronisation entre appareils" aria-label="Synchronisation entre appareils">⇅</button>
     </div>
     <div class="stat-row">
-      <div class="stat-tile"><span class="n" id="stat-month">0</span><span class="l">séances / mois</span></div>
+      <button type="button" class="stat-tile stat-tile-clickable" id="stat-month-tile"><span class="n" id="stat-month">0</span><span class="l">séances / mois</span></button>
       <div class="stat-tile"><span class="n" id="stat-record">—</span><span class="l">record</span></div>
       <div class="stat-tile"><span class="n" id="stat-total">0</span><span class="l">séances au total</span></div>
     </div>
@@ -184,9 +184,19 @@
     <div class="statusbar-spacer"></div>
     <div class="appbar">
       <button class="back-btn" data-go="journal"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
-      <div>
-        <h2 id="session-title-display">Séance</h2>
+      <div style="flex:1;min-width:0;">
+        <div class="lib-detail-name-row" style="gap:6px;">
+          <h2 id="session-title-display">Séance</h2>
+          <button class="lib-detail-rename-btn" id="session-rename-btn" title="Renommer la séance" aria-label="Renommer la séance">✎</button>
+        </div>
         <div class="sub" id="session-date-display"></div>
+      </div>
+    </div>
+    <div class="field" id="session-rename-field" style="margin:0 16px 10px;" hidden>
+      <input type="text" id="session-rename-input" autocomplete="off">
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="session-rename-save">Enregistrer</button>
+        <button class="ghost-btn" id="session-rename-cancel">Annuler</button>
       </div>
     </div>
     <div class="session-tours-row">
@@ -299,6 +309,17 @@
     </div>
     <button class="ghost-btn" id="close-library-detail-btn">Fermer</button>
     <button class="ghost-btn exo-action-danger" id="lib-detail-delete-btn">Supprimer de la bibliothèque</button>
+  </div>
+</div>
+
+<!-- ===== Modale : graphique du nombre de séances par mois =====
+     Ouverte en cliquant sur la tuile "séances / mois" du journal, à la
+     demande de Christine. -->
+<div class="modal-backdrop" id="sessions-chart-modal">
+  <div class="modal">
+    <h3>Séances par mois</h3>
+    <div id="sessions-chart-body"></div>
+    <button class="ghost-btn" id="close-sessions-chart-btn">Fermer</button>
   </div>
 </div>
 

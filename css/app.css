@@ -35,6 +35,10 @@ button{font-family:inherit;}
 
 .stat-row{display:flex;gap:8px;padding:0 16px 8px;}
 .stat-tile{flex:1;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:11px;display:flex;flex-direction:column;gap:2px;}
+/* La tuile "séances / mois" est un <button> (ouvre le graphique par mois, à
+   la demande de Christine) - on annule les styles par défaut d'un bouton
+   pour qu'elle reste identique aux deux autres tuiles (record, total). */
+.stat-tile-clickable{font-family:inherit;text-align:left;cursor:pointer;-webkit-appearance:none;appearance:none;}
 .stat-tile .n{font-family:var(--font-display);font-weight:600;font-size:1.65rem;color:var(--accent);font-variant-numeric:tabular-nums;}
 .stat-tile .l{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
 
@@ -114,7 +118,7 @@ button{font-family:inherit;}
 .lib-detail-fav{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-radius:100px;padding:6px 14px;font-size:.8rem;font-weight:600;color:var(--muted);cursor:pointer;}
 .lib-detail-fav.on{color:#e8a90f;border-color:#e8a90f;background:#fbf1dc;}
 .lib-detail-name-row{display:flex;align-items:center;gap:8px;}
-.lib-detail-name-row h3{flex:1;min-width:0;}
+.lib-detail-name-row h3,.lib-detail-name-row h2{flex:1;min-width:0;}
 .lib-detail-rename-btn{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);border-radius:50%;width:30px;height:30px;color:var(--muted);cursor:pointer;}
 .lib-detail-rename-actions{display:flex;gap:8px;margin-top:6px;}
 .lib-detail-rename-actions .primary-btn,.lib-detail-rename-actions .ghost-btn{flex:1;padding:9px;}

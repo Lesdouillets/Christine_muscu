@@ -273,6 +273,27 @@ async function openSession(sessionId) {
   document.getElementById("session-title-display").textContent = session.title;
   document.getElementById("session-date-display").textContent = formatDateFr(session.date);
   document.getElementById("session-tours-value").textContent = session.tours || 1;
+  // Renommer une séance (à la demande de Christine) - même principe que le
+  // renommage d'un exercice de bibliothèque : un crayon ouvre un champ
+  // inline, pas de modale séparée.
+  document.getElementById("session-rename-field").hidden = true;
+  document.getElementById("session-rename-btn").onclick = () => {
+    document.getElementById("session-rename-input").value = session.title;
+    document.getElementById("session-rename-field").hidden = false;
+    document.getElementById("session-rename-input").focus();
+  };
+  document.getElementById("session-rename-cancel").onclick = () => {
+    document.getElementById("session-rename-field").hidden = true;
+  };
+  document.getElementById("session-rename-save").onclick = async () => {
+    const newTitle = document.getElementById("session-rename-input").value.trim();
+    if (!newTitle) return;
+    session.title = newTitle;
+    await Db.updateSession(session);
+    document.getElementById("session-title-display").textContent = session.title;
+    document.getElementById("session-rename-field").hidden = true;
+    await renderJournal(document.getElementById("journal-search").value);
+  };
   await renderExerciseList();
   goTo("session");
 }
@@ -1512,6 +1533,71 @@ function buildProgressChart(points, unit) {
   return wrap;
 }
 
+// ---------- Graphique "séances par mois" ----------
+// Ouvert depuis la tuile "séances / mois" du journal, à la demande de
+// Christine. Même style de graphique dessiné à la main (SVG, pas de
+// librairie) que le graphique de progrès par exercice, mais en barres plutôt
+// qu'en ligne (un compte par mois, pas une valeur continue).
+async function openSessionsPerMonthChart() {
+  const sessions = await Db.getAllSessions();
+  const body = document.getElementById("sessions-chart-body");
+  body.innerHTML = "";
+  body.appendChild(buildSessionsPerMonthChart(sessions));
+  document.getElementById("sessions-chart-modal").classList.add("open");
+}
+
+// 12 derniers mois glissants (y compris ceux à 0 séance, pour voir les trous),
+// du plus ancien au plus récent.
+function buildSessionsPerMonthChart(sessions) {
+  const now = new Date();
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({ year: d.getFullYear(), month: d.getMonth(), count: 0 });
+  }
+  for (const s of sessions) {
+    const d = new Date(s.date + "T00:00:00");
+    const m = months.find((mo) => mo.year === d.getFullYear() && mo.month === d.getMonth());
+    if (m) m.count++;
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "progress-chart-wrap";
+
+  if (sessions.length === 0) {
+    wrap.innerHTML = `<div class="progress-empty">Pas encore de séance enregistrée.</div>`;
+    return wrap;
+  }
+
+  const W = 320, H = 180, padL = 8, padR = 8, padT = 22, padB = 26;
+  const maxCount = Math.max(1, ...months.map((m) => m.count));
+  const n = months.length;
+  const gap = 6;
+  const barW = (W - padL - padR - gap * (n - 1)) / n;
+  const xAt = (i) => padL + i * (barW + gap);
+  const yAt = (v) => padT + (1 - v / maxCount) * (H - padT - padB);
+  const labelFr = (m) => new Date(m.year, m.month, 1).toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Nombre de séances par mois, 12 derniers mois">`;
+  svg += `<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--line)" stroke-width="1"/>`;
+  months.forEach((m, i) => {
+    const x = xAt(i);
+    const y = m.count > 0 ? yAt(m.count) : H - padB;
+    const h = (H - padB) - y;
+    svg += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="3" fill="var(--accent)" opacity="${m.count > 0 ? 1 : 0.15}"/>`;
+    if (m.count > 0) {
+      svg += `<text x="${x + barW / 2}" y="${y - 5}" font-size="10" font-weight="600" fill="var(--ink)" text-anchor="middle">${m.count}</text>`;
+    }
+    // Un mois sur deux affiché si 12 mois (sinon trop serré) - toujours le dernier.
+    if (i % 2 === 0 || i === n - 1) {
+      svg += `<text x="${x + barW / 2}" y="${H - 8}" font-size="9" fill="var(--muted)" text-anchor="middle">${labelFr(m)}</text>`;
+    }
+  });
+  svg += `</svg>`;
+  wrap.innerHTML = svg;
+  return wrap;
+}
+
 // ---------- Export / import ----------
 //
 // L'app ne stocke rien en ligne (vie privée) : chaque appareil (téléphone,
@@ -1845,6 +1931,12 @@ async function init() {
   });
   on("close-sync-modal-btn", "click", () => {
     document.getElementById("sync-modal").classList.remove("open");
+  });
+  // Graphique "séances par mois" (à la demande de Christine, en cliquant sur
+  // la tuile correspondante du journal).
+  on("stat-month-tile", "click", openSessionsPerMonthChart);
+  on("close-sessions-chart-btn", "click", () => {
+    document.getElementById("sessions-chart-modal").classList.remove("open");
   });
   // Synchro automatique dès qu'un code est déjà configuré au chargement de
   // l'appli (à la demande de Christine : "toujours à jour", en temps réel,
