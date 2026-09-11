@@ -232,6 +232,31 @@ async function createSession() {
   openSession(session.id);
 }
 
+// Recrée une nouvelle séance aujourd'hui avec les mêmes exercices qu'une
+// séance existante (même titre, même nombre de tours, même ordre), mais sans
+// aucun poids/ressenti enregistré - un vrai nouveau départ, pas une copie des
+// anciennes valeurs. Pratique pour les routines qui reviennent (jambes, haut
+// du corps...) sans tout re-chercher à chaque fois.
+async function duplicateSession(sessionId) {
+  const source = await Db.getSession(sessionId);
+  if (!source) return;
+  const sourceExs = await Db.getExerciseSessionsForSession(sessionId);
+  const newSession = await Db.addSession({ date: todayIso(), title: source.title, tours: source.tours });
+  for (const ex of sourceExs) {
+    await Db.addExerciseSession({
+      sessionId: newSession.id,
+      libraryExerciseId: ex.libraryExerciseId,
+      name: ex.name,
+      type: ex.type,
+      targetReps: ex.targetReps,
+      order: ex.order,
+      rounds: [],
+    });
+    if (ex.libraryExerciseId) await bumpLibraryUsage(ex.libraryExerciseId);
+  }
+  openSession(newSession.id);
+}
+
 // ---------- Écran séance ----------
 
 async function openSession(sessionId) {
@@ -921,6 +946,215 @@ async function confirmAddExerciseFromModal() {
   await addExerciseToSession(libEx, newExerciseReps);
 }
 
+// ---------- Progrès ----------
+
+let progressSelectedLibId = null;
+let progressShowTable = false;
+
+async function renderProgressList(filterText) {
+  const listEl = document.getElementById("progress-list");
+  listEl.innerHTML = "";
+  const allEx = await Db.getAllExerciseSessions();
+  const counts = new Map(); // libraryExerciseId -> nombre de séances
+  for (const ex of allEx) {
+    if (!ex.libraryExerciseId) continue;
+    counts.set(ex.libraryExerciseId, (counts.get(ex.libraryExerciseId) || 0) + 1);
+  }
+  // Nom actuel (pas celui enregistré au moment de l'ajout, qui peut être
+  // périmé depuis un renommage dans la bibliothèque).
+  const withNames = await Promise.all(
+    [...counts.entries()].map(async ([libId, count]) => {
+      const libEx = await Db.getLibraryExercise(libId);
+      return libEx ? { libId, count, name: libEx.name } : null;
+    })
+  );
+  const q = (filterText || "").trim().toLowerCase();
+  const entries = withNames
+    .filter(Boolean)
+    .filter((v) => matchesSearch(v.name, q))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr"))
+    .map((v) => [v.libId, v]);
+
+  if (entries.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "progress-empty";
+    empty.textContent = counts.size === 0
+      ? "Pas encore d'historique - ajoute des séances pour voir ta progression ici."
+      : "Aucun exercice ne correspond à cette recherche.";
+    listEl.appendChild(empty);
+    return;
+  }
+
+  for (const [libId, v] of entries) {
+    const item = document.createElement("button");
+    item.className = "progress-item";
+    item.innerHTML = `
+      <span class="progress-item-name">${escapeHtml(v.name)}</span>
+      <span class="progress-item-count">${v.count} séance${v.count > 1 ? "s" : ""}</span>
+    `;
+    item.addEventListener("click", () => openProgressDetail(libId, v.name));
+    listEl.appendChild(item);
+  }
+}
+
+async function openProgressDetail(libId, name) {
+  progressSelectedLibId = libId;
+  progressShowTable = false;
+  document.getElementById("progress-detail-name").textContent = name;
+  document.getElementById("progress-list-wrap").hidden = true;
+  document.getElementById("progress-detail-wrap").hidden = false;
+  await renderProgressDetail();
+}
+
+function closeProgressDetail() {
+  document.getElementById("progress-detail-wrap").hidden = true;
+  document.getElementById("progress-list-wrap").hidden = false;
+}
+
+// Construit la série de points (date + valeur) pour un exercice : le poids
+// total le plus lourd du jour pour barre/haltères, le nombre de répétitions
+// cible pour poids du corps (aucune charge n'est suivie sur ce type-là).
+async function buildProgressSeries(libId) {
+  const [exSessions, sessions] = await Promise.all([
+    Db.getExerciseSessionsByLibraryId(libId),
+    Db.getAllSessions(),
+  ]);
+  const dateOf = new Map(sessions.map((s) => [s.id, s.date]));
+  const points = [];
+  for (const ex of exSessions) {
+    const date = dateOf.get(ex.sessionId);
+    if (!date) continue;
+    if (ex.type === "poids_du_corps") {
+      points.push({ date, value: ex.targetReps, unit: "reps" });
+      continue;
+    }
+    let best = null;
+    for (const round of ex.rounds || []) {
+      if (!round.weight) continue;
+      const total = ex.type === "barre"
+        ? round.weight.bar + round.weight.added * 2
+        : round.weight.perHand * 2;
+      if (best === null || total > best) best = total;
+    }
+    if (best !== null) points.push({ date, value: best, unit: "kg" });
+  }
+  points.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  return points;
+}
+
+function formatProgressValue(value, unit) {
+  return unit === "kg" ? `${Math.round(value * 10) / 10} kg` : `${value} reps`;
+}
+
+async function renderProgressDetail() {
+  const body = document.getElementById("progress-detail-body");
+  body.innerHTML = "";
+  const points = await buildProgressSeries(progressSelectedLibId);
+
+  if (points.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "progress-empty";
+    empty.textContent = "Pas encore de charge ou de répétitions enregistrées pour cet exercice.";
+    body.appendChild(empty);
+    return;
+  }
+
+  const unit = points[points.length - 1].unit;
+  const best = Math.max(...points.map((p) => p.value));
+  const record = document.createElement("div");
+  record.className = "progress-record";
+  record.innerHTML = `<span class="l">Record</span><span class="n">${formatProgressValue(best, unit)}</span>`;
+  body.appendChild(record);
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.className = "progress-table-toggle";
+  toggleBtn.textContent = progressShowTable ? "Voir le graphique" : "Voir en tableau";
+  toggleBtn.addEventListener("click", () => {
+    progressShowTable = !progressShowTable;
+    renderProgressDetail();
+  });
+  body.appendChild(toggleBtn);
+
+  body.appendChild(progressShowTable ? buildProgressTable(points, unit) : buildProgressChart(points, unit));
+}
+
+function buildProgressTable(points, unit) {
+  const table = document.createElement("table");
+  table.className = "progress-table";
+  const rows = points.slice().reverse().map(
+    (p) => `<tr><td>${formatDateFr(p.date)}</td><td>${formatProgressValue(p.value, unit)}</td></tr>`
+  ).join("");
+  table.innerHTML = `<thead><tr><th>Date</th><th>${unit === "kg" ? "Charge" : "Répétitions"}</th></tr></thead><tbody>${rows}</tbody>`;
+  return table;
+}
+
+// Petit graphique en ligne, dessiné à la main (pas de librairie externe) :
+// une seule série donc pas de légende, marqueurs >= 8px avec liseré clair,
+// valeur affichée directement sur le dernier point, infobulle au toucher sur
+// chaque point (zone de contact agrandie pour rester facile à toucher).
+function buildProgressChart(points, unit) {
+  const wrap = document.createElement("div");
+  wrap.className = "progress-chart-wrap";
+
+  const W = 320, H = 160, padL = 8, padR = 8, padT = 22, padB = 22;
+  const values = points.map((p) => p.value);
+  let minV = Math.min(...values), maxV = Math.max(...values);
+  if (minV === maxV) { minV -= 1; maxV += 1; }
+  const spanV = maxV - minV;
+  minV -= spanV * 0.12;
+  maxV += spanV * 0.12;
+
+  const n = points.length;
+  const xAt = (i) => padL + (n === 1 ? (W - padL - padR) / 2 : (i / (n - 1)) * (W - padL - padR));
+  const yAt = (v) => padT + (1 - (v - minV) / (maxV - minV)) * (H - padT - padB);
+
+  const linePts = points.map((p, i) => `${xAt(i)},${yAt(p.value)}`).join(" ");
+  const areaPts = `${xAt(0)},${H - padB} ${linePts} ${xAt(n - 1)},${H - padB}`;
+  const lastX = xAt(n - 1), lastY = yAt(points[n - 1].value);
+  const labelAbove = lastY > padT + 14;
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Évolution ${unit === "kg" ? "de la charge" : "des répétitions"} pour cet exercice">`;
+  svg += `<line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--line)" stroke-width="1"/>`;
+  svg += `<polygon points="${areaPts}" fill="var(--accent)" opacity="0.1"/>`;
+  svg += `<polyline points="${linePts}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  svg += `<text x="${xAt(0)}" y="${H - 4}" font-size="9" fill="var(--muted)" text-anchor="start">${formatDateFr(points[0].date)}</text>`;
+  if (n > 1) {
+    svg += `<text x="${xAt(n - 1)}" y="${H - 4}" font-size="9" fill="var(--muted)" text-anchor="end">${formatDateFr(points[n - 1].date)}</text>`;
+  }
+  points.forEach((p, i) => {
+    svg += `<circle cx="${xAt(i)}" cy="${yAt(p.value)}" r="4" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+  svg += `<text x="${lastX}" y="${labelAbove ? lastY - 10 : lastY + 16}" font-size="11" font-weight="600" fill="var(--ink)" text-anchor="middle">${formatProgressValue(points[n - 1].value, unit)}</text>`;
+  svg += `</svg>`;
+  wrap.innerHTML = svg;
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "progress-tooltip";
+  wrap.appendChild(tooltip);
+
+  const svgEl = wrap.querySelector("svg");
+  points.forEach((p, i) => {
+    const hit = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    hit.setAttribute("cx", xAt(i));
+    hit.setAttribute("cy", yAt(p.value));
+    hit.setAttribute("r", "14");
+    hit.setAttribute("fill", "transparent");
+    hit.style.cursor = "pointer";
+    hit.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      const rect = svgEl.getBoundingClientRect();
+      const scaleX = rect.width / W, scaleY = rect.height / H;
+      tooltip.textContent = `${formatDateFr(p.date)} · ${formatProgressValue(p.value, unit)}`;
+      tooltip.style.left = `${xAt(i) * scaleX}px`;
+      tooltip.style.top = `${Math.max(0, yAt(p.value) * scaleY - 8)}px`;
+      tooltip.classList.add("show");
+    });
+    svgEl.appendChild(hit);
+  });
+
+  return wrap;
+}
+
 // ---------- Export ----------
 
 async function exportSessions() {
@@ -970,6 +1204,23 @@ async function init() {
   document.querySelectorAll('.navitem[data-nav="add"]').forEach((btn) =>
     btn.addEventListener("click", openNewSessionForm)
   );
+  document.querySelectorAll('.navitem[data-nav="progress"]').forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      closeProgressDetail();
+      await renderProgressList(document.getElementById("progress-search").value);
+      goTo("progress");
+    })
+  );
+  document.getElementById("progress-search").addEventListener("input", (e) => renderProgressList(e.target.value));
+  document.getElementById("progress-back-btn").addEventListener("click", closeProgressDetail);
+  // Cache l'infobulle du graphique de progrès si on touche ailleurs que le
+  // graphique (un seul écouteur, jamais recréé, pour ne pas en accumuler à
+  // chaque affichage du graphique).
+  document.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest(".progress-chart-wrap")) {
+      document.querySelectorAll(".progress-tooltip.show").forEach((t) => t.classList.remove("show"));
+    }
+  });
   document.querySelectorAll("[data-go='journal']").forEach((btn) =>
     btn.addEventListener("click", async () => {
       await renderJournal();
@@ -977,6 +1228,9 @@ async function init() {
     })
   );
   document.getElementById("create-session-btn").addEventListener("click", createSession);
+  document.getElementById("duplicate-session-btn").addEventListener("click", () => {
+    if (currentSessionId) duplicateSession(currentSessionId);
+  });
   document.getElementById("delete-session-btn").addEventListener("click", async () => {
     const session = await Db.getSession(currentSessionId);
     if (!session) return;
