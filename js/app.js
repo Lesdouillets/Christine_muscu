@@ -888,10 +888,17 @@ async function renderLibrary(filterText) {
 
 // Incrémente le compteur d'utilisation d'un exercice de bibliothèque - appelé
 // à chaque fois qu'il est ajouté à une séance (voir addExerciseToSession).
+// Le marque aussi favori automatiquement au passage : la modale d'ajout
+// filtre par défaut sur les favoris (à la demande de Christine), donc un
+// exercice utilisé mais jamais favorisé à la main (le cas de tous les
+// exercices importés de la bibliothèque publique, comme "Hip Thrust")
+// disparaissait de la liste dès la séance suivante - exactement le bug déjà
+// rencontré avec les exercices tout juste créés.
 async function bumpLibraryUsage(libraryExerciseId) {
   const libEx = await Db.getLibraryExercise(libraryExerciseId);
   if (!libEx) return;
   libEx.usageCount = (libEx.usageCount || 0) + 1;
+  libEx.favorite = true;
   await Db.updateLibraryExercise(libEx);
 }
 
