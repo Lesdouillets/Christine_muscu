@@ -724,6 +724,7 @@ async function renderLibrary(filterText) {
     item.querySelector(".lib-fav-btn").addEventListener("click", async (e) => {
       e.stopPropagation();
       ex.favorite = !ex.favorite;
+      ex.updatedAt = Date.now();
       await Db.updateLibraryExercise(ex);
       renderLibrary(document.getElementById("library-search").value);
     });
@@ -764,6 +765,7 @@ function openLibraryDetail(ex) {
     const newName = document.getElementById("lib-detail-rename-input").value.trim();
     if (!newName) return;
     ex.name = newName;
+    ex.updatedAt = Date.now();
     await Db.updateLibraryExercise(ex);
     document.getElementById("lib-detail-name").textContent = ex.name;
     document.getElementById("lib-detail-rename-field").hidden = true;
@@ -774,6 +776,7 @@ function openLibraryDetail(ex) {
   favBtn.classList.toggle("on", !!ex.favorite);
   favBtn.onclick = async () => {
     ex.favorite = !ex.favorite;
+    ex.updatedAt = Date.now();
     await Db.updateLibraryExercise(ex);
     favBtn.textContent = ex.favorite ? "★ Dans les favoris" : "★ Ajouter aux favoris";
     favBtn.classList.toggle("on", !!ex.favorite);
@@ -1155,22 +1158,95 @@ function buildProgressChart(points, unit) {
   return wrap;
 }
 
-// ---------- Export ----------
+// ---------- Export / import ----------
+//
+// L'app ne stocke rien en ligne (vie privée) : chaque appareil (téléphone,
+// ordinateur...) a sa PROPRE copie locale des données, dans le stockage du
+// navigateur. Un renommage ou un favori ajouté sur l'ordinateur n'apparaît
+// donc jamais tout seul sur le téléphone, et inversement - ce sont deux
+// bases séparées. L'export/import ci-dessous sert de pont manuel entre
+// appareils : on exporte sur l'un, on transfère le fichier (AirDrop, mail...),
+// on importe sur l'autre.
 
 async function exportSessions() {
   const sessions = await Db.getAllSessions();
-  const full = [];
+  const fullSessions = [];
   for (const s of sessions) {
     const exs = await Db.getExerciseSessionsForSession(s.id);
-    full.push({ ...s, exercises: exs });
+    fullSessions.push({ ...s, exercises: exs });
   }
-  const blob = new Blob([JSON.stringify(full, null, 2)], { type: "application/json" });
+  const library = await Db.getAllLibraryExercises();
+  const data = { version: 1, exportedAt: new Date().toISOString(), sessions: fullSessions, library };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `carnet-musculation-export-${todayIso()}.json`;
+  a.download = `carnet-musculation-sauvegarde-${todayIso()}.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// Importe un fichier exporté par exportSessions ci-dessus. Un import ne
+// SUPPRIME jamais rien sur cet appareil : chaque séance/exercice de
+// bibliothèque du fichier est ajouté s'il n'existe pas encore ici, ou mis à
+// jour s'il existe déjà (même id) - ce qui est justement ce qu'il faut pour
+// faire arriver un renommage ou un favori fait ailleurs. Accepte aussi
+// l'ancien format d'export (un simple tableau de séances, sans bibliothèque).
+async function importBackup(file) {
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (err) {
+    alert("Ce fichier n'est pas une sauvegarde valide de cette app.");
+    return;
+  }
+  const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
+  const library = Array.isArray(data.library) ? data.library : [];
+
+  if (sessions.length === 0 && library.length === 0) {
+    alert("Ce fichier ne contient ni séance ni exercice de bibliothèque à importer.");
+    return;
+  }
+  if (!confirm(`Importer ${sessions.length} séance(s) et ${library.length} exercice(s) de bibliothèque depuis ce fichier ? Rien ne sera supprimé sur cet appareil, seulement ajouté ou mis à jour.`)) {
+    return;
+  }
+
+  let sessionCount = 0, exerciseCount = 0;
+  for (const s of sessions) {
+    if (!s || !s.id) continue;
+    const { exercises, ...sessionFields } = s;
+    await Db.updateSession(sessionFields);
+    sessionCount++;
+    for (const ex of exercises || []) {
+      if (!ex || !ex.id) continue;
+      await Db.updateExerciseSession(ex);
+      exerciseCount++;
+    }
+  }
+  let libraryCount = 0, librarySkippedCount = 0;
+  for (const libEx of library) {
+    if (!libEx || !libEx.id) continue;
+    // Ne jamais écraser une modification locale (renommage, favori) plus
+    // récente que celle importée : on ne remplace que si l'exercice importé
+    // est plus récent (ou si aucun des deux n'a de date, comportement
+    // d'origine conservé pour ne rien casser sur d'anciennes sauvegardes).
+    const local = await Db.getLibraryExercise(libEx.id);
+    if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
+      librarySkippedCount++;
+      continue;
+    }
+    await Db.updateLibraryExercise(libEx);
+    libraryCount++;
+  }
+
+  const skippedMsg = librarySkippedCount > 0
+    ? ` (${librarySkippedCount} exercice(s) de bibliothèque déjà plus récents sur cet appareil ont été conservés tels quels)`
+    : "";
+  alert(`Import terminé : ${sessionCount} séance(s) et ${libraryCount} exercice(s) de bibliothèque mis à jour (${exerciseCount} exercice(s) de séance).${skippedMsg}`);
+  await renderJournal(document.getElementById("journal-search").value);
+  if (document.getElementById("view-library").classList.contains("active")) {
+    await renderLibrary(document.getElementById("library-search").value);
+  }
 }
 
 // ---------- Câblage des événements et démarrage ----------
@@ -1275,6 +1351,14 @@ async function init() {
   });
   document.getElementById("journal-search").addEventListener("input", (e) => renderJournal(e.target.value));
   document.getElementById("export-btn").addEventListener("click", exportSessions);
+  document.getElementById("import-btn").addEventListener("click", () => {
+    document.getElementById("import-file-input").click();
+  });
+  document.getElementById("import-file-input").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ""; // pour pouvoir réimporter le même fichier plus tard si besoin
+    if (file) await importBackup(file);
+  });
   // Ferme n'importe quelle fenêtre (gif, ajout d'exercice...) si on touche
   // à côté, en dehors de son contenu.
   document.querySelectorAll(".modal-backdrop").forEach((backdrop) => {
