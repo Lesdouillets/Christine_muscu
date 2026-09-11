@@ -46,7 +46,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         ajouter
       </button>
-      <button class="navitem" disabled title="Pas encore construit">
+      <button class="navitem" data-nav="progress">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
         progrès
       </button>
@@ -82,7 +82,50 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
         ajouter
       </button>
-      <button class="navitem" disabled title="Pas encore construit">
+      <button class="navitem" data-nav="progress">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
+        progrès
+      </button>
+    </div>
+  </section>
+
+  <!-- ===== PROGRÈS ===== -->
+  <section class="view" id="view-progress">
+    <div class="statusbar-spacer"></div>
+    <div class="appbar"><h1>Progrès</h1></div>
+
+    <div id="progress-list-wrap">
+      <div class="tools-row">
+        <div class="search-field">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input type="text" id="progress-search" placeholder="chercher un exercice…">
+        </div>
+      </div>
+      <div class="list" id="progress-list"></div>
+    </div>
+
+    <div id="progress-detail-wrap" hidden>
+      <div class="appbar" style="padding-top:0;">
+        <button class="back-btn" id="progress-back-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <h2 id="progress-detail-name"></h2>
+      </div>
+      <div class="scroll" id="progress-detail-body"></div>
+    </div>
+
+    <div class="bottomnav">
+      <button class="navitem" data-nav="journal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12l8-8 8 8M6 10v10h12V10"/></svg>
+        journal
+      </button>
+      <button class="navitem" data-nav="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>
+        bibliothèque
+      </button>
+      <button class="navitem" data-nav="add">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        ajouter
+      </button>
+      <button class="navitem" data-nav="progress">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V9m7 10V5m7 14v-6"/></svg>
         progrès
       </button>
@@ -126,6 +169,7 @@
     <div class="scroll">
       <div class="acc-list" id="exercise-list"></div>
       <button class="add-lib-btn" id="add-exercise-btn">+ ajouter un exercice à cette séance</button>
+      <button class="ghost-btn" id="duplicate-session-btn">Recommencer cette séance aujourd'hui</button>
       <button class="ghost-btn session-delete-btn" id="delete-session-btn">Supprimer cette séance</button>
     </div>
   </section>
