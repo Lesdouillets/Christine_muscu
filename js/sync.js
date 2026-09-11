@@ -74,16 +74,38 @@ function generateSyncCode() {
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
 }
 
-// Envoie l'état local complet vers le cloud, sous le code de sync actif.
-// Remplace entièrement le document distant (une sauvegarde n'est pas une
-// fusion : c'est un instantané de "l'état ici, maintenant").
+// Construit la charge utile a envoyer au cloud, en laissant de cote le
+// catalogue integre a l'appli (data/exercises-library.json, ~1300 exercices
+// prefixes "ds-..." - voir seedPublicLibraryIfNeeded dans app.js). Ce
+// catalogue est deja identique sur chaque appareil des le premier lancement :
+// le renvoyer a chaque synchronisation n'apporte rien et suffisait a lui
+// seul a depasser la limite Firestore (1 Mo), meme sans aucune photo
+// personnelle - c'etait le vrai bug derriere le message "sauvegarde trop
+// volumineuse" que Christine a rencontre avant qu'on comprenne l'origine.
+// On ne garde donc, cote bibliotheque, que ce qui est propre a Christine :
+// un exercice cree a la main, mis en favori, deja utilise, note, ou modifie
+// (renomme / gif change, ce qui pose updatedAt).
+async function buildCloudSyncPayload() {
+  const full = await buildBackupPayload();
+  const library = full.library.filter((ex) => {
+    const isCustom = !String(ex.id).startsWith("ds-");
+    return isCustom || ex.favorite || (ex.usageCount || 0) > 0 || ex.note || ex.updatedAt;
+  });
+  return { ...full, library };
+}
+
+// Envoie l'état local (filtré, voir buildCloudSyncPayload) vers le cloud,
+// sous le code de sync actif. Remplace entièrement le document distant (une
+// sauvegarde n'est pas une fusion : c'est un instantané de "l'état ici,
+// maintenant").
 async function pushBackupToCloud() {
   const code = getSyncCode();
   if (!code) throw new Error("Aucun code de synchronisation configuré.");
-  const payload = await buildBackupPayload();
+  const payload = await buildCloudSyncPayload();
   const json = JSON.stringify(payload);
-  // Une limite Firestore existe par document (1 Mo) - le cas le plus probable
-  // pour la dépasser est une photo/gif ajoutée en local (encodée en base64,
+  // Une limite Firestore existe par document (1 Mo). Une fois le catalogue
+  // integre exclu (voir buildCloudSyncPayload), la cause la plus probable
+  // d'un depassement est une photo/gif ajoutee en local (encodee en base64,
   // donc volumineuse). On le détecte avant l'envoi pour donner un message
   // clair plutôt qu'une erreur Firestore obscure.
   const approxBytes = new Blob([json]).size;
