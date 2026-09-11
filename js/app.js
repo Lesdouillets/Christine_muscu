@@ -960,9 +960,9 @@ function openExerciseModal() {
   modalEquipment = null;
   modalFavoritesOnly = false;
   buildModalChips();
-  document.getElementById("modal-quickfilter").hidden = false;
-  document.getElementById("modal-categories").hidden = false;
-  document.getElementById("modal-equipment").hidden = false;
+  document.getElementById("modal-quickfilter-group").hidden = false;
+  document.getElementById("modal-categories-group").hidden = false;
+  document.getElementById("modal-equipment-group").hidden = false;
   document.getElementById("modal-quickfilter").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
   document.getElementById("modal-categories").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
   document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
@@ -1002,9 +1002,9 @@ async function searchExercisesInModal(query) {
   // place aux résultats - sur téléphone le clavier prend déjà la moitié de
   // l'écran, inutile de rogner encore plus l'espace visible.
   const hideFilters = rawQuery.length > 0;
-  document.getElementById("modal-quickfilter").hidden = hideFilters;
-  document.getElementById("modal-categories").hidden = hideFilters;
-  document.getElementById("modal-equipment").hidden = hideFilters;
+  document.getElementById("modal-quickfilter-group").hidden = hideFilters;
+  document.getElementById("modal-categories-group").hidden = hideFilters;
+  document.getElementById("modal-equipment-group").hidden = hideFilters;
   const resultsEl = document.getElementById("exercise-search-results");
   resultsEl.innerHTML = "";
 
@@ -1409,6 +1409,18 @@ async function importBackup(file) {
 
 // ---------- Câblage des événements et démarrage ----------
 
+// Cable un ecouteur seulement si l'element existe. Avant ce garde-fou, un
+// seul id manquant (typiquement une page HTML restee en cache pendant qu'un
+// nouveau js/app.js a deja ete recupere) faisait planter tout le reste de
+// init() d'un coup - plus aucun bouton de l'appli ne repondait, y compris
+// ouvrir une seance, alors que le probleme venait d'un seul champ. Chaque
+// petit bug de cablage reste desormais isole a la fonctionnalite concernee.
+function on(id, event, handler) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, handler);
+  else console.warn(`[carnet-muscu] élément #${id} introuvable - vérifie que la page est à jour (ferme et rouvre l'appli).`);
+}
+
 async function init() {
   await Db.init();
   seedPublicLibraryIfNeeded().then(() => {
@@ -1445,8 +1457,8 @@ async function init() {
       goTo("progress");
     })
   );
-  document.getElementById("progress-search").addEventListener("input", (e) => renderProgressList(e.target.value));
-  document.getElementById("progress-back-btn").addEventListener("click", closeProgressDetail);
+  on("progress-search", "input", (e) => renderProgressList(e.target.value));
+  on("progress-back-btn", "click", closeProgressDetail);
   // Cache l'infobulle du graphique de progrès si on touche ailleurs que le
   // graphique (un seul écouteur, jamais recréé, pour ne pas en accumuler à
   // chaque affichage du graphique).
@@ -1461,15 +1473,15 @@ async function init() {
       goTo("journal");
     })
   );
-  document.getElementById("create-session-btn").addEventListener("click", createSession);
-  document.getElementById("new-session-tours-minus").addEventListener("click", () => stepNewSessionTours(-1));
-  document.getElementById("new-session-tours-plus").addEventListener("click", () => stepNewSessionTours(1));
-  document.getElementById("session-tours-minus").addEventListener("click", () => stepSessionTours(-1));
-  document.getElementById("session-tours-plus").addEventListener("click", () => stepSessionTours(1));
-  document.getElementById("duplicate-session-btn").addEventListener("click", () => {
+  on("create-session-btn", "click", createSession);
+  on("new-session-tours-minus", "click", () => stepNewSessionTours(-1));
+  on("new-session-tours-plus", "click", () => stepNewSessionTours(1));
+  on("session-tours-minus", "click", () => stepSessionTours(-1));
+  on("session-tours-plus", "click", () => stepSessionTours(1));
+  on("duplicate-session-btn", "click", () => {
     if (currentSessionId) duplicateSession(currentSessionId);
   });
-  document.getElementById("delete-session-btn").addEventListener("click", async () => {
+  on("delete-session-btn", "click", async () => {
     const session = await Db.getSession(currentSessionId);
     if (!session) return;
     if (!confirm(`Supprimer la séance « ${session.title} » du ${formatDateFr(session.date)} ? Cette action est définitive.`)) return;
@@ -1477,11 +1489,11 @@ async function init() {
     await renderJournal();
     goTo("journal");
   });
-  document.getElementById("library-search").addEventListener("input", (e) => renderLibrary(e.target.value));
-  document.getElementById("add-library-exercise-btn").addEventListener("click", openLibraryAddModal);
-  document.getElementById("cancel-add-library-btn").addEventListener("click", closeLibraryAddModal);
-  document.getElementById("confirm-add-library-btn").addEventListener("click", confirmAddLibraryExercise);
-  document.getElementById("close-library-detail-btn").addEventListener("click", closeLibraryDetail);
+  on("library-search", "input", (e) => renderLibrary(e.target.value));
+  on("add-library-exercise-btn", "click", openLibraryAddModal);
+  on("cancel-add-library-btn", "click", closeLibraryAddModal);
+  on("confirm-add-library-btn", "click", confirmAddLibraryExercise);
+  on("close-library-detail-btn", "click", closeLibraryDetail);
   document.querySelectorAll("#lib-new-gif-kind button").forEach((btn) => {
     btn.addEventListener("click", () => {
       libNewGifKind = btn.dataset.val;
@@ -1490,33 +1502,31 @@ async function init() {
       document.getElementById("lib-new-gif-file-field").hidden = libNewGifKind !== "file";
     });
   });
-  document.getElementById("lib-new-gif-file").addEventListener("change", (e) => {
+  on("lib-new-gif-file", "change", (e) => {
     const file = e.target.files[0];
     if (!file) { libNewGifFileDataUrl = null; return; }
     const reader = new FileReader();
     reader.onload = () => { libNewGifFileDataUrl = reader.result; };
     reader.readAsDataURL(file);
   });
-  document.getElementById("add-exercise-btn").addEventListener("click", openExerciseModal);
-  document.getElementById("cancel-add-exercise-btn").addEventListener("click", closeExerciseModal);
-  document.getElementById("confirm-add-exercise-btn").addEventListener("click", confirmAddExerciseFromModal);
-  document.getElementById("exercise-search-input").addEventListener("input", (e) =>
-    searchExercisesInModal(e.target.value)
-  );
-  document.getElementById("new-exercise-reps-minus").addEventListener("click", () => {
+  on("add-exercise-btn", "click", openExerciseModal);
+  on("cancel-add-exercise-btn", "click", closeExerciseModal);
+  on("confirm-add-exercise-btn", "click", confirmAddExerciseFromModal);
+  on("exercise-search-input", "input", (e) => searchExercisesInModal(e.target.value));
+  on("new-exercise-reps-minus", "click", () => {
     newExerciseReps = Math.max(1, newExerciseReps - 1);
     document.getElementById("new-exercise-reps-value").textContent = newExerciseReps;
   });
-  document.getElementById("new-exercise-reps-plus").addEventListener("click", () => {
+  on("new-exercise-reps-plus", "click", () => {
     newExerciseReps = newExerciseReps + 1;
     document.getElementById("new-exercise-reps-value").textContent = newExerciseReps;
   });
-  document.getElementById("journal-search").addEventListener("input", (e) => renderJournal(e.target.value));
-  document.getElementById("export-btn").addEventListener("click", exportSessions);
-  document.getElementById("import-btn").addEventListener("click", () => {
+  on("journal-search", "input", (e) => renderJournal(e.target.value));
+  on("export-btn", "click", exportSessions);
+  on("import-btn", "click", () => {
     document.getElementById("import-file-input").click();
   });
-  document.getElementById("import-file-input").addEventListener("change", async (e) => {
+  on("import-file-input", "change", async (e) => {
     const file = e.target.files[0];
     e.target.value = ""; // pour pouvoir réimporter le même fichier plus tard si besoin
     if (file) await importBackup(file);

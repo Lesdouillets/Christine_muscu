@@ -69,9 +69,18 @@
         <input type="text" id="library-search" placeholder="rechercher un exercice…">
       </div>
     </div>
-    <div class="lib-cat-row" id="library-categories"></div>
-    <div class="lib-cat-row" id="library-equipment"></div>
-    <div class="lib-cat-row" id="library-quickfilter"></div>
+    <div class="filter-group">
+      <span class="filter-group-label">Muscle ciblé</span>
+      <div class="lib-cat-row" id="library-categories"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-group-label">Matériel</span>
+      <div class="lib-cat-row" id="library-equipment"></div>
+    </div>
+    <div class="filter-group">
+      <span class="filter-group-label">Favoris et popularité</span>
+      <div class="lib-cat-row" id="library-quickfilter"></div>
+    </div>
     <div class="lib-status" id="lib-status"></div>
     <div class="lib-grid" id="library-grid"></div>
     <button class="add-lib-btn" id="add-library-exercise-btn">+ ajouter un exercice à ma bibliothèque</button>
@@ -201,9 +210,18 @@
     <div class="field" style="margin:0;">
       <input type="text" id="exercise-search-input" placeholder="chercher ou ajouter un exercice…">
     </div>
-    <div class="lib-cat-row" id="modal-quickfilter"></div>
-    <div class="lib-cat-row" id="modal-categories"></div>
-    <div class="lib-cat-row" id="modal-equipment"></div>
+    <div class="filter-group" id="modal-quickfilter-group">
+      <span class="filter-group-label">Favoris</span>
+      <div class="lib-cat-row" id="modal-quickfilter"></div>
+    </div>
+    <div class="filter-group" id="modal-categories-group">
+      <span class="filter-group-label">Muscle ciblé</span>
+      <div class="lib-cat-row" id="modal-categories"></div>
+    </div>
+    <div class="filter-group" id="modal-equipment-group">
+      <span class="filter-group-label">Matériel</span>
+      <div class="lib-cat-row" id="modal-equipment"></div>
+    </div>
     <div id="exercise-search-results"></div>
     <div id="new-exercise-form" hidden>
       <div class="field" style="margin:0;" id="new-exercise-type-field">
