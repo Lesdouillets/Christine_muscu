@@ -16,7 +16,7 @@
 // le même projet Firebase que la synchro) qui garde la clé côté serveur et
 // ne renvoie au navigateur que le résultat déjà lu. Voir functions/index.js
 // pour la consigne donnée à l'IA et le format de réponse exact.
-const AI_IMPORT_ENDPOINT = "https://analyzesessionphoto-<A_COMPLETER>.a.run.app";
+const AI_IMPORT_ENDPOINT = "https://europe-west1-christinemuscu.cloudfunctions.net/analyzeSessionPhoto";
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {

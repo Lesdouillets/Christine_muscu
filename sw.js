@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v22";
+const CACHE_NAME = "carnet-muscu-v23";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -19,6 +19,10 @@ const CACHE_NAME = "carnet-muscu-v22";
 // voir js/ai.js - toujours un brouillon à valider avant enregistrement)
 // (v22 : le message d'erreur d'import IA affiche le détail technique, pour
 // diagnostiquer sans avoir besoin d'ouvrir la console du navigateur)
+// (v23 : corrige l'adresse de la fonction Firebase dans js/ai.js - une
+// adresse provisoire "<A_COMPLETER>" n'avait jamais été remplacée par la
+// vraie, donc l'import IA échouait toujours en pratique malgré des tests
+// serveur qui, eux, passaient)
 const APP_SHELL = [
   "./",
   "./index.html",
