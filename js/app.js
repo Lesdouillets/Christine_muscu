@@ -1834,6 +1834,18 @@ async function mergeBackupData(data) {
         continue;
       }
       await Db.updateLibraryExercise(libEx, { preserveTimestamp: true });
+      // usageCount ne doit JAMAIS venir tel quel d'un appareil ou d'un
+      // ancien instantané du cloud : c'est une valeur dérivée, qui ne peut
+      // être fiable que recalculée depuis les VRAIES exerciseSessions
+      // présentes ICI. Sans cette ligne, un compteur faux poussé par un
+      // autre appareil (ou une vieille sauvegarde jamais repassée par la
+      // migration migrateUsageCountsFromRealData) écrase la valeur
+      // correcte à chaque synchro et y reste pour toujours, même si cet
+      // appareil avait déjà le bon chiffre - cas réel signalé par Christine
+      // le 12/09/2026 : "Kettlebell alternating renegade row" marqué comme
+      // utilisé dans la bibliothèque, alors qu'il n'apparaît dans aucune
+      // séance ni dans Progrès (qui, eux, comptent les vraies données).
+      await recomputeLibraryUsageCount(libEx.id);
       libraryCount++;
     }
 
@@ -2208,8 +2220,16 @@ async function migrateFavoritesForAlreadyUsedExercises() {
 // "Band bent-over hip extension" marqué utilisé alors qu'elle ne l'avait
 // jamais réellement fait. Recalcule tout depuis les vraies exerciseSessions,
 // une seule fois par appareil (comme migrateFavoritesForAlreadyUsedExercises).
+// -v2 (14/09/2026) : mergeBackupData() écrasait ce compteur avec la valeur
+// reçue d'un autre appareil ou d'une vieille sauvegarde cloud, sans jamais
+// le recalculer - un compteur faux pouvait donc revenir après une synchro
+// même une fois corrigé ici (cas réel : "Kettlebell alternating renegade
+// row" marqué utilisé alors qu'absent de Progrès et de toute séance). La
+// synchro est corrigée séparément pour ne plus jamais recopier ce champ tel
+// quel ; ce -v2 fait tourner une dernière fois ce recalcul général pour
+// rattraper les compteurs déjà faussés sur cet appareil avant ce correctif.
 async function migrateUsageCountsFromRealData() {
-  const FLAG = "carnet-muscu-migrated-usage-recompute-v1";
+  const FLAG = "carnet-muscu-migrated-usage-recompute-v2";
   if (localStorage.getItem(FLAG)) return;
   try {
     const allExerciseSessions = await Db.getAllExerciseSessions();

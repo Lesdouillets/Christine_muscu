@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v29";
+const CACHE_NAME = "carnet-muscu-v30";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -49,6 +49,11 @@ const CACHE_NAME = "carnet-muscu-v29";
 // l'exercice supprimé. Chaque suppression pose maintenant une "tombe"
 // (id + date) qui est elle-même synchronisée, pour que les autres appareils
 // sachent qu'il faut supprimer plutôt que réimporter)
+// (v30 : corrige un compteur "utilisé X×" qui pouvait rester faux pour
+// toujours - la synchro copiait ce chiffre tel quel depuis un autre appareil
+// ou une vieille sauvegarde cloud au lieu de le recalculer depuis les
+// vraies séances présentes ici. Cas réel : "Kettlebell alternating renegade
+// row" marqué utilisé alors qu'absent de Progrès et de toute séance)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
