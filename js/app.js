@@ -2064,6 +2064,23 @@ function on(id, event, handler) {
 // non, ce qui donnerait exactement l'impression d'un favori qui "revient" -
 // on agirait alors sur l'un des deux sans le savoir). À retirer une fois le
 // problème élucidé.
+// Formate un horodatage en "il y a Xs/min/h" - pour voir d'un coup d'œil si
+// un enregistrement vient d'être réécrit (quelques secondes) ou date de
+// bien avant le test en cours (plusieurs jours) - ça distingue "quelque
+// chose vient de réécrire cette valeur" de "cette valeur n'a en fait jamais
+// bougé".
+function agoLabel(ts) {
+  if (!ts) return "jamais";
+  const diffMs = Date.now() - ts;
+  const s = Math.round(diffMs / 1000);
+  if (s < 60) return `il y a ${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `il y a ${m}min`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `il y a ${h}h`;
+  return `il y a ${Math.round(h / 24)}j`;
+}
+
 async function diagnoseFavorites() {
   const all = await Db.getAllLibraryExercises();
   const favs = all.filter((ex) => ex.favorite);
@@ -2074,20 +2091,37 @@ async function diagnoseFavorites() {
     byName.get(key).push(ex);
   }
   const dupes = [...byName.values()].filter((group) => group.length > 1);
-  let msg = `${all.length} exercices au total dans la bibliothèque, dont ${favs.length} en favori.`;
+  const code = typeof getSyncCode === "function" ? getSyncCode() : null;
+  let cacheVersion = "inconnue";
+  try {
+    const keys = await caches.keys();
+    cacheVersion = keys.join(", ") || "(aucun cache)";
+  } catch (err) {
+    // pas grave, juste informatif
+  }
+  let msg = `Version de l'appli (cache) : ${cacheVersion}\nSynchro cloud : ${code ? "activée" : "désactivée"}${code ? " (dernier envoi : " + (getLastSyncLabel ? getLastSyncLabel() : "?") + ")" : ""}\n\n`;
+  msg += `${all.length} exercices au total dans la bibliothèque, dont ${favs.length} en favori.`;
   if (dupes.length > 0) {
     msg += `\n\n⚠️ ${dupes.length} nom(s) en double (deux fiches différentes pour le même exercice) :\n`;
     msg += dupes
-      .slice(0, 15)
+      .slice(0, 10)
       .map((group) => `- « ${group[0].name} » : ${group.map((e) => `${e.id} (favori: ${e.favorite ? "oui" : "non"})`).join(" / ")}`)
       .join("\n");
-    if (dupes.length > 15) msg += `\n… et ${dupes.length - 15} de plus.`;
+    if (dupes.length > 10) msg += `\n… et ${dupes.length - 10} de plus.`;
   } else {
     msg += "\n\nAucun doublon de nom trouvé.";
   }
-  msg += `\n\nListe des favoris actuels :\n${favs.map((e) => `- ${e.name}`).join("\n") || "(aucun)"}`;
+  msg += `\n\nFavoris actuels (dernière écriture) :\n${
+    favs
+      .map((e) => {
+        const recent = Db.recentLocalWriteTime ? Db.recentLocalWriteTime(e.id, 3600000) : 0;
+        const recentTag = recent ? " [écrit sur cet appareil " + agoLabel(recent) + "]" : "";
+        return `- ${e.name} (${e.id}) - MAJ ${agoLabel(e.updatedAt)}, utilisé ${e.usageCount || 0}×${recentTag}`;
+      })
+      .join("\n") || "(aucun)"
+  }`;
   alert(msg);
-  console.log("[diagnostic favoris]", { total: all.length, favCount: favs.length, dupes });
+  console.log("[diagnostic favoris]", { total: all.length, favCount: favs.length, dupes, favs });
 }
 
 // Migration ponctuelle (une seule fois par appareil) : les exercices déjà
