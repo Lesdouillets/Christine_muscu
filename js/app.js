@@ -299,6 +299,25 @@ async function openSession(sessionId) {
     document.getElementById("session-rename-field").hidden = true;
     await renderJournal(document.getElementById("journal-search").value);
   };
+  // Modifier la date d'une séance déjà enregistrée (demande de Christine du
+  // 13/09/2026) - même principe inline que le renommage ci-dessus.
+  document.getElementById("session-date-edit-field").hidden = true;
+  document.getElementById("session-date-edit-btn").onclick = () => {
+    document.getElementById("session-date-edit-input").value = session.date;
+    document.getElementById("session-date-edit-field").hidden = false;
+  };
+  document.getElementById("session-date-edit-cancel").onclick = () => {
+    document.getElementById("session-date-edit-field").hidden = true;
+  };
+  document.getElementById("session-date-edit-save").onclick = async () => {
+    const newDate = document.getElementById("session-date-edit-input").value;
+    if (!newDate) return;
+    session.date = newDate;
+    await Db.updateSession(session);
+    document.getElementById("session-date-display").textContent = formatDateFr(session.date);
+    document.getElementById("session-date-edit-field").hidden = true;
+    await renderJournal(document.getElementById("journal-search").value);
+  };
   await renderExerciseList();
   goTo("session");
 }
@@ -1714,12 +1733,27 @@ async function mergeBackupData(data) {
     // l'horodatage d'origine de l'enregistrement reçu, pas "maintenant" -
     // sinon une prochaine fusion ne pourrait plus jamais départager deux
     // versions correctement (voir le commentaire sur updateSession, js/db.js).
+    // `Db.recentLocalWriteTime(id)` : garde-fou supplémentaire (voir le
+    // commentaire dans js/db.js) - on compare l'enregistrement reçu au PLUS
+    // RÉCENT de l'horodatage lu en base et de celui d'une écriture directe
+    // toute fraîche sur cet appareil, jamais à un seul des deux. Un
+    // enregistrement reçu réellement plus récent est donc toujours appliqué
+    // normalement (la fusion multi-appareils continue de fonctionner) ; seul
+    // un enregistrement reçu qui semblerait "aussi récent ou plus vieux" à
+    // cause d'une comparaison qui se serait trompée (deux écritures très
+    // rapprochées, par exemple) est protégé. Corrige un bug réel constaté le
+    // 13/09/2026 : un favori enlevé qui redevenait favori quelques secondes
+    // plus tard, au moment précis où l'envoi automatique se déclenchait.
     let sessionCount = 0, sessionSkippedCount = 0, exerciseCount = 0, exerciseSkippedCount = 0;
     for (const s of sessions) {
       if (!s || !s.id) continue;
       const { exercises, ...sessionFields } = s;
       const localSession = await Db.getSession(s.id);
-      if (localSession && localSession.updatedAt && sessionFields.updatedAt && sessionFields.updatedAt < localSession.updatedAt) {
+      const effectiveLocalUpdatedAt = Math.max(
+        (localSession && localSession.updatedAt) || 0,
+        Db.recentLocalWriteTime(s.id)
+      );
+      if (effectiveLocalUpdatedAt && sessionFields.updatedAt && sessionFields.updatedAt < effectiveLocalUpdatedAt) {
         sessionSkippedCount++;
       } else {
         await Db.updateSession(sessionFields, { preserveTimestamp: true });
@@ -1728,7 +1762,8 @@ async function mergeBackupData(data) {
       for (const ex of exercises || []) {
         if (!ex || !ex.id) continue;
         const localEx = await Db.getExerciseSession(ex.id);
-        if (localEx && localEx.updatedAt && ex.updatedAt && ex.updatedAt < localEx.updatedAt) {
+        const effectiveLocalExUpdatedAt = Math.max((localEx && localEx.updatedAt) || 0, Db.recentLocalWriteTime(ex.id));
+        if (effectiveLocalExUpdatedAt && ex.updatedAt && ex.updatedAt < effectiveLocalExUpdatedAt) {
           exerciseSkippedCount++;
           continue;
         }
@@ -1740,7 +1775,8 @@ async function mergeBackupData(data) {
     for (const libEx of library) {
       if (!libEx || !libEx.id) continue;
       const local = await Db.getLibraryExercise(libEx.id);
-      if (local && local.updatedAt && libEx.updatedAt && libEx.updatedAt < local.updatedAt) {
+      const effectiveLocalLibUpdatedAt = Math.max((local && local.updatedAt) || 0, Db.recentLocalWriteTime(libEx.id));
+      if (effectiveLocalLibUpdatedAt && libEx.updatedAt && libEx.updatedAt < effectiveLocalLibUpdatedAt) {
         librarySkippedCount++;
         continue;
       }

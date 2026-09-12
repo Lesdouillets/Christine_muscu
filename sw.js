@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v24";
+const CACHE_NAME = "carnet-muscu-v25";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -26,6 +26,9 @@ const CACHE_NAME = "carnet-muscu-v24";
 // (v24 : import IA - date modifiable, stepper +/- pour les tours, GIF affiché
 // pour l'exercice choisi ; ajoute un bouton temporaire "diagnostiquer les
 // favoris" pour comprendre le souci de favoris qui disparaissent/reviennent)
+// (v25 : corrige un vrai bug de synchro - un favori enlevé pouvait redevenir
+// favori ~4s plus tard à cause de l'envoi automatique vers le cloud ; ajoute
+// aussi la possibilité de modifier la date d'une séance déjà enregistrée)
 const APP_SHELL = [
   "./",
   "./index.html",

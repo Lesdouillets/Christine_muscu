@@ -44,6 +44,33 @@ function uid() {
   );
 }
 
+// Garde-fou anti-régression pour la synchro (13/09/2026) : Christine a vu un
+// favori qu'elle venait d'enlever redevenir favori quelques secondes plus
+// tard, pile au moment où l'envoi automatique vers le cloud se déclenche
+// (voir scheduleAutoPush, js/sync.js - délai de 4s). On retient ici, en
+// mémoire, l'horodatage exact de la dernière écriture DIRECTE (faite par
+// Christine sur cet appareil, pas une écriture de fusion) pour chaque
+// enregistrement. mergeBackupData (js/app.js) compare l'horodatage reçu à
+// CET horodatage-ci en plus de celui lu en base, plutôt qu'à la seule
+// valeur relue depuis IndexedDB juste après - ça couvre le cas où la
+// lecture et la fusion s'entremêlent d'une façon qui ferait perdre la
+// comparaison normale. Un enregistrement vraiment plus récent venu d'un
+// autre appareil continue d'être appliqué normalement (voir l'usage dans
+// mergeBackupData : on prend le plus récent des deux horodatages connus,
+// pas un simple blocage total). Volontairement en mémoire seulement (pas
+// persistant) : protection à très court terme, pas un système de fusion à
+// part entière.
+const _recentLocalWrites = new Map(); // id -> timestamp de la dernière écriture locale directe
+function _markRecentLocalWrite(id) {
+  _recentLocalWrites.set(id, Date.now());
+  if (_recentLocalWrites.size > 500) {
+    const cutoff = Date.now() - 60000;
+    for (const [k, t] of _recentLocalWrites) {
+      if (t < cutoff) _recentLocalWrites.delete(k);
+    }
+  }
+}
+
 const Db = {
   // Point d'accroche pour la synchronisation cloud automatique (voir
   // js/sync.js) : app.js branche ici une fonction appelée après chaque
@@ -70,6 +97,17 @@ const Db = {
     return this._db;
   },
 
+  // Horodatage de la dernière écriture DIRECTE de `id` sur cet appareil, si
+  // elle date de moins de `windowMs` (voir le commentaire sur
+  // _recentLocalWrites plus haut), sinon 0. mergeBackupData compare
+  // l'enregistrement reçu au PLUS RÉCENT de cet horodatage et de celui lu en
+  // base - jamais un blocage total : un enregistrement reçu réellement plus
+  // récent est quand même appliqué normalement.
+  recentLocalWriteTime(id, windowMs = 15000) {
+    const t = _recentLocalWrites.get(id);
+    return t && Date.now() - t < windowMs ? t : 0;
+  },
+
   async addSession(session) {
     const db = this._db;
     const record = { id: uid(), updatedAt: Date.now(), ...session };
@@ -79,6 +117,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    _markRecentLocalWrite(record.id);
     this._notifyWrite();
     return record;
   },
@@ -101,6 +140,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    if (!opts.preserveTimestamp) _markRecentLocalWrite(record.id);
     this._notifyWrite();
   },
 
@@ -134,6 +174,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    _markRecentLocalWrite(record.id);
     this._notifyWrite();
     return record;
   },
@@ -149,6 +190,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    if (!opts.preserveTimestamp) _markRecentLocalWrite(record.id);
     this._notifyWrite();
   },
 
@@ -258,6 +300,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    _markRecentLocalWrite(record.id);
     this._notifyWrite();
     return record;
   },
@@ -291,6 +334,7 @@ const Db = {
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
+    if (!opts.preserveTimestamp) _markRecentLocalWrite(record.id);
     this._notifyWrite();
   },
 

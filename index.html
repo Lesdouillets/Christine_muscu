@@ -200,7 +200,10 @@
           <h2 id="session-title-display">Séance</h2>
           <button class="lib-detail-rename-btn" id="session-rename-btn" title="Renommer la séance" aria-label="Renommer la séance">✎</button>
         </div>
-        <div class="sub" id="session-date-display"></div>
+        <div class="lib-detail-name-row" style="gap:6px;">
+          <span class="sub" id="session-date-display"></span>
+          <button class="lib-detail-rename-btn" id="session-date-edit-btn" title="Modifier la date" aria-label="Modifier la date">✎</button>
+        </div>
       </div>
     </div>
     <div class="field" id="session-rename-field" style="margin:0 16px 10px;" hidden>
@@ -208,6 +211,16 @@
       <div class="lib-detail-rename-actions">
         <button class="primary-btn" id="session-rename-save">Enregistrer</button>
         <button class="ghost-btn" id="session-rename-cancel">Annuler</button>
+      </div>
+    </div>
+    <!-- Modifier la date d'une séance déjà enregistrée (demande de
+         Christine du 13/09/2026) - même principe que le renommage juste
+         au-dessus : un crayon ouvre un champ inline. -->
+    <div class="field" id="session-date-edit-field" style="margin:0 16px 10px;" hidden>
+      <input type="date" id="session-date-edit-input">
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="session-date-edit-save">Enregistrer</button>
+        <button class="ghost-btn" id="session-date-edit-cancel">Annuler</button>
       </div>
     </div>
     <div class="session-tours-row">
