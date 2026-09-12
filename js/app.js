@@ -969,8 +969,19 @@ async function recomputeLibraryUsageCount(libraryExerciseId) {
 async function bumpLibraryUsage(libraryExerciseId) {
   const libEx = await Db.getLibraryExercise(libraryExerciseId);
   if (!libEx) return;
-  libEx.favorite = true;
-  await Db.updateLibraryExercise(libEx);
+  // Correctif du 13/09/2026 : ce favori automatique ne doit jouer qu'à la
+  // TOUTE PREMIÈRE utilisation de l'exercice (usageCount encore à 0) - avant
+  // ce correctif, il se redéclenchait à CHAQUE ajout/remplacement/duplication
+  // de séance, et réécrasait donc systématiquement un favori que Christine
+  // avait sciemment retiré entre-temps (exactement le bug "j'enlève un
+  // favori, il revient" qu'elle a signalé - reproductible dès qu'elle
+  // rajoutait ou dupliquait une séance avec cet exercice, sans lien avec la
+  // synchro cloud). Sur les utilisations suivantes, on ne touche plus du
+  // tout au favori : seul le compteur d'utilisation est mis à jour.
+  if (!(libEx.usageCount > 0) && !libEx.favorite) {
+    libEx.favorite = true;
+    await Db.updateLibraryExercise(libEx);
+  }
   await recomputeLibraryUsageCount(libraryExerciseId);
 }
 
@@ -1753,7 +1764,7 @@ async function mergeBackupData(data) {
         (localSession && localSession.updatedAt) || 0,
         Db.recentLocalWriteTime(s.id)
       );
-      if (effectiveLocalUpdatedAt && sessionFields.updatedAt && sessionFields.updatedAt < effectiveLocalUpdatedAt) {
+      if (effectiveLocalUpdatedAt && sessionFields.updatedAt && sessionFields.updatedAt <= effectiveLocalUpdatedAt) {
         sessionSkippedCount++;
       } else {
         await Db.updateSession(sessionFields, { preserveTimestamp: true });
@@ -1763,7 +1774,7 @@ async function mergeBackupData(data) {
         if (!ex || !ex.id) continue;
         const localEx = await Db.getExerciseSession(ex.id);
         const effectiveLocalExUpdatedAt = Math.max((localEx && localEx.updatedAt) || 0, Db.recentLocalWriteTime(ex.id));
-        if (effectiveLocalExUpdatedAt && ex.updatedAt && ex.updatedAt < effectiveLocalExUpdatedAt) {
+        if (effectiveLocalExUpdatedAt && ex.updatedAt && ex.updatedAt <= effectiveLocalExUpdatedAt) {
           exerciseSkippedCount++;
           continue;
         }
@@ -1776,7 +1787,7 @@ async function mergeBackupData(data) {
       if (!libEx || !libEx.id) continue;
       const local = await Db.getLibraryExercise(libEx.id);
       const effectiveLocalLibUpdatedAt = Math.max((local && local.updatedAt) || 0, Db.recentLocalWriteTime(libEx.id));
-      if (effectiveLocalLibUpdatedAt && libEx.updatedAt && libEx.updatedAt < effectiveLocalLibUpdatedAt) {
+      if (effectiveLocalLibUpdatedAt && libEx.updatedAt && libEx.updatedAt <= effectiveLocalLibUpdatedAt) {
         librarySkippedCount++;
         continue;
       }

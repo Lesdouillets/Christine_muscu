@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v26";
+const CACHE_NAME = "carnet-muscu-v27";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -33,6 +33,13 @@ const CACHE_NAME = "carnet-muscu-v26";
 // synchro, et pour chaque favori : date de derniere ecriture et si elle a eu
 // lieu sur cet appareil dans la derniere heure - pour identifier precisement
 // ce qui reecrit un favori)
+// (v27 : corrige la VRAIE cause du bug des favoris qui revenaient -
+// bumpLibraryUsage() forcait le favori a true a CHAQUE ajout/remplacement/
+// duplication d'un exercice dans une seance, pas seulement la premiere fois,
+// et ecrasait donc systematiquement un favori retire a la main entre-temps.
+// Ne s'applique plus qu'a la toute premiere utilisation. Corrige aussi un
+// cas limite dans la fusion de synchro - comparaison stricte "<" au lieu de
+// "<=" sur des horodatages identiques)
 const APP_SHELL = [
   "./",
   "./index.html",
