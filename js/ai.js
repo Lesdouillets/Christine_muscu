@@ -47,7 +47,11 @@ async function analyzeSessionPhoto(file) {
       body: JSON.stringify({ mimeType: file.type || "image/jpeg", data: base64 }),
     });
   } catch (err) {
-    throw new Error("Impossible de contacter le service de lecture de photo (vérifie ta connexion internet).");
+    // Le détail technique (err.message) est affiché entre parenthèses :
+    // pas très parlant pour Christine, mais précieux pour comprendre
+    // pourquoi ça bloque (réseau, bloqueur de pub/traqueurs, etc.) sans
+    // avoir besoin d'ouvrir la console du navigateur.
+    throw new Error(`Impossible de contacter le service de lecture de photo (vérifie ta connexion internet) [${err.name}: ${err.message}].`);
   }
   if (!response.ok) {
     let detail = "";

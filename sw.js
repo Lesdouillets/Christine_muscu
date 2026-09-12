@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v21";
+const CACHE_NAME = "carnet-muscu-v22";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -17,6 +17,8 @@ const CACHE_NAME = "carnet-muscu-v21";
 // données entre deux appareils)
 // (v21 : import d'une séance depuis une photo, lue automatiquement par IA -
 // voir js/ai.js - toujours un brouillon à valider avant enregistrement)
+// (v22 : le message d'erreur d'import IA affiche le détail technique, pour
+// diagnostiquer sans avoir besoin d'ouvrir la console du navigateur)
 const APP_SHELL = [
   "./",
   "./index.html",
