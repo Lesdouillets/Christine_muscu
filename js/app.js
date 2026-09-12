@@ -2256,15 +2256,22 @@ async function migrateUsageCountsFromRealData() {
 // voir le "share_target" dans manifest.json et handleSharedPhoto dans sw.js,
 // qui a intercepté l'envoi avant qu'il n'atteigne le serveur (impossible sur
 // un hébergement statique comme GitHub Pages) et a mis la photo de côté dans
-// un cache en attendant que l'appli se recharge ici. On ouvre alors
-// directement l'import IA avec cette photo, comme si Christine avait choisi
-// le fichier elle-même.
-async function checkForSharedPhoto() {
-  if (!location.search.includes("photo-partagee=1")) return;
-  // Nettoie l'URL tout de suite, avant même de savoir si une photo est
-  // effectivement présente, pour ne jamais redéclencher ça au prochain
-  // rechargement de la page (ex. après avoir remis l'appli au premier plan).
-  window.history.replaceState({}, "", location.pathname);
+// un cache. On ouvre alors directement l'import IA avec cette photo, comme
+// si Christine avait choisi le fichier elle-même.
+//
+// Deux façons d'arriver ici, TOUTES LES DEUX nécessaires (constaté avec
+// Christine le 14/09/2026 : le partage ouvrait bien l'appli, mais jamais
+// l'import) :
+// 1) L'appli n'était pas ouverte (ou Android en lance une nouvelle instance) :
+//    une vraie navigation se fait vers index.html?photo-partagee=1 (le
+//    redirect fait par handleSharedPhoto), et checkForSharedPhoto() ci-dessous
+//    la détecte au chargement de la page.
+// 2) L'appli était DÉJÀ ouverte en arrière-plan : Android/Chrome se contente
+//    alors souvent de ramener cette fenêtre déjà existante au premier plan
+//    SANS jamais lui faire charger cette URL - la méthode 1) ne se déclenche
+//    donc jamais. sw.js prévient dans ce cas directement la page ouverte par
+//    un message (postMessage), écouté plus bas sur navigator.serviceWorker.
+async function consumeSharedPhotoFromCache() {
   if (!("caches" in window)) return;
   try {
     const cache = await caches.open("carnet-muscu-shared-photo");
@@ -2277,6 +2284,25 @@ async function checkForSharedPhoto() {
   } catch (err) {
     console.error("[carnet-muscu] échec de la récupération de la photo partagée :", err);
   }
+}
+
+async function checkForSharedPhoto() {
+  if (!location.search.includes("photo-partagee=1")) return;
+  // Nettoie l'URL tout de suite, avant même de savoir si une photo est
+  // effectivement présente, pour ne jamais redéclencher ça au prochain
+  // rechargement de la page (ex. après avoir remis l'appli au premier plan).
+  window.history.replaceState({}, "", location.pathname);
+  await consumeSharedPhotoFromCache();
+}
+
+// Cas 2) ci-dessus : l'appli était déjà ouverte, sw.js le signale directement
+// via un message plutôt que par une navigation (voir handleSharedPhoto).
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data && event.data.type === "carnet-muscu-shared-photo") {
+      consumeSharedPhotoFromCache();
+    }
+  });
 }
 
 async function init() {

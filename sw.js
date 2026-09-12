@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v30";
+const CACHE_NAME = "carnet-muscu-v31";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -54,6 +54,11 @@ const CACHE_NAME = "carnet-muscu-v30";
 // ou une vieille sauvegarde cloud au lieu de le recalculer depuis les
 // vraies séances présentes ici. Cas réel : "Kettlebell alternating renegade
 // row" marqué utilisé alors qu'absent de Progrès et de toute séance)
+// (v31 : le partage de photo WhatsApp ouvrait bien l'appli mais jamais
+// l'import quand elle était déjà ouverte en arrière-plan - Android se
+// contentait de ramener cette fenêtre au premier plan sans lui faire
+// charger la redirection. sw.js prévient maintenant directement toute
+// fenêtre déjà ouverte par un message, en plus de la redirection)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
@@ -101,6 +106,7 @@ self.addEventListener("activate", (event) => {
 // normale, qui la récupère et ouvre directement l'import IA avec (voir
 // checkForSharedPhoto dans js/app.js).
 async function handleSharedPhoto(request) {
+  let stored = false;
   try {
     const formData = await request.formData();
     const file = formData.get("photo");
@@ -110,10 +116,23 @@ async function handleSharedPhoto(request) {
         "photo",
         new Response(file, { headers: { "Content-Type": file.type || "application/octet-stream" } })
       );
+      stored = true;
     }
   } catch (err) {
     // Partage sans photo exploitable (ex. juste du texte) - on redirige quand
     // même vers l'appli plutôt que de laisser une erreur s'afficher.
+  }
+  // Si une fenêtre de l'appli est déjà ouverte (en arrière-plan par exemple),
+  // Android/Chrome se contente souvent de la ramener au premier plan SANS
+  // jamais lui faire charger la redirection ci-dessous - constaté avec
+  // Christine le 14/09/2026 (l'appli s'ouvrait, mais jamais l'import). On la
+  // prévient donc directement par message, en plus de la redirection
+  // (nécessaire, elle, quand aucune fenêtre n'était déjà ouverte).
+  if (stored) {
+    const allClients = await self.clients.matchAll({ type: "window" });
+    for (const client of allClients) {
+      client.postMessage({ type: "carnet-muscu-shared-photo" });
+    }
   }
   return Response.redirect(new URL("index.html?photo-partagee=1", self.location.href).href, 303);
 }
