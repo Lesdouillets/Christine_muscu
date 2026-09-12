@@ -241,6 +241,11 @@ async function pushBackupToCloud() {
     updatedAt: new Date().toISOString(),
     sessions: payload.sessions,
     library: payload.library,
+    // Sans ça, une suppression (voir Db.deleteLibraryExercise et le
+    // correctif du 13/09/2026) ne serait jamais transmise au cloud : l'autre
+    // appareil (ou ce même appareil après une prochaine synchro) réimporterait
+    // alors l'exercice supprimé comme s'il n'avait jamais disparu.
+    libraryTombstones: payload.libraryTombstones || [],
   });
   setLastSyncNow();
 }

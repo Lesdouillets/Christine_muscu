@@ -23,6 +23,6 @@ Pas encore construit (phases suivantes du plan) : import de photo WhatsApp, lect
 - Essaie la recherche du journal avec le nom d'un exercice que tu as ajouté.
 - Essaie l'export : un fichier `.json` doit se télécharger avec tes séances.
 
-## Limite connue à vérifier sur un vrai téléphone
+## Partage de photo depuis une autre appli (WhatsApp...)
 
-Le fichier `manifest.json` déclare la réception de partage (`share_target`) pour recevoir une photo depuis WhatsApp plus tard, mais **rien n'exploite encore ce partage dans le code** - c'est prévu en phase 4. Pour l'instant, partager une photo vers l'app depuis WhatsApp n'aura aucun effet visible.
+`manifest.json` déclare "Carnet de muscu" comme destination de partage (`share_target`) : sur Android (pas iOS, l'API n'existe pas là-bas), l'app installée apparaît dans le menu de partage du téléphone quand on partage une photo. Comme GitHub Pages est un hébergement statique qui ne peut jamais répondre à un POST, `sw.js` intercepte lui-même cet envoi (voir `handleSharedPhoto`) avant qu'il n'atteigne le serveur - sinon c'est une erreur 405 garantie, constatée par Christine le 13/09/2026. La photo est mise de côté dans un cache le temps que l'appli se recharge, puis `checkForSharedPhoto` (js/app.js) la récupère et ouvre directement l'import IA avec.

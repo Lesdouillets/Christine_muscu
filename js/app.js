@@ -1689,7 +1689,12 @@ async function buildBackupPayload() {
     fullSessions.push({ ...s, exercises: exs });
   }
   const library = await Db.getAllLibraryExercises();
-  return { version: 1, exportedAt: new Date().toISOString(), sessions: fullSessions, library };
+  // libraryTombstones : voir le commentaire sur Db.deleteLibraryExercise -
+  // sans ça, un exercice supprimé (notamment un doublon) revient tout seul
+  // au prochain import/synchro, puisque mergeBackupData ne supprime jamais
+  // rien de lui-même.
+  const libraryTombstones = await Db.getAllLibraryTombstones();
+  return { version: 1, exportedAt: new Date().toISOString(), sessions: fullSessions, library, libraryTombstones };
 }
 
 async function exportSessions() {
@@ -1730,6 +1735,33 @@ async function mergeBackupData(data) {
   try {
     const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
     const library = Array.isArray(data.library) ? data.library : [];
+    const libraryTombstones = Array.isArray(data.libraryTombstones) ? data.libraryTombstones : [];
+
+    // Applique d'abord les tombes reçues (voir Db.deleteLibraryExercise) -
+    // AVANT les exercices de bibliothèque ci-dessous, pour qu'un exercice
+    // supprimé ailleurs ne soit pas d'abord réimporté puis supprimé (ça
+    // marcherait quand même, mais dans le mauvais ordre ça redéclencherait
+    // un rendu/écriture inutile). Une tombe ne supprime ici que si elle est
+    // plus récente que le dernier changement connu localement sur cet id
+    // (même règle "le plus récent gagne" que pour le reste, avec le même
+    // garde-fou anti-régression Db.recentLocalWriteTime) : si Christine a
+    // recréé ou modifié cet exercice ICI après cette suppression-là ailleurs,
+    // sa version locale l'emporte et n'est pas supprimée.
+    let tombstoneCount = 0, tombstoneSkippedCount = 0;
+    for (const t of libraryTombstones) {
+      if (!t || !t.id || !t.deletedAt) continue;
+      const localTombstone = await Db.getLibraryTombstone(t.id);
+      if (localTombstone && localTombstone.deletedAt >= t.deletedAt) continue; // déjà connue, rien à faire
+      const local = await Db.getLibraryExercise(t.id);
+      const effectiveLocalLibUpdatedAt = Math.max((local && local.updatedAt) || 0, Db.recentLocalWriteTime(t.id));
+      if (local && effectiveLocalLibUpdatedAt > t.deletedAt) {
+        tombstoneSkippedCount++;
+        continue; // modifié ici après cette suppression-là : on garde la version locale
+      }
+      if (local) await Db.deleteLibraryExerciseRecordOnly(t.id);
+      await Db.recordLibraryTombstone(t.id, t.deletedAt);
+      tombstoneCount++;
+    }
 
     // Règle de fusion, identique pour séances / exercices de séance /
     // bibliothèque : on ne prend un enregistrement venu d'ailleurs (fichier
@@ -1785,6 +1817,16 @@ async function mergeBackupData(data) {
     let libraryCount = 0, librarySkippedCount = 0;
     for (const libEx of library) {
       if (!libEx || !libEx.id) continue;
+      // Ne réimporte pas un exercice que Christine a supprimé ICI depuis
+      // (tombe locale plus récente que la version reçue) - sans ce test, un
+      // exercice tout juste supprimé (doublon, erreur de saisie...)
+      // reviendrait dès la prochaine synchro simplement parce que l'autre
+      // appareil (ou le cloud) l'a encore dans son état.
+      const tombstone = await Db.getLibraryTombstone(libEx.id);
+      if (tombstone && tombstone.deletedAt >= (libEx.updatedAt || 0)) {
+        librarySkippedCount++;
+        continue;
+      }
       const local = await Db.getLibraryExercise(libEx.id);
       const effectiveLocalLibUpdatedAt = Math.max((local && local.updatedAt) || 0, Db.recentLocalWriteTime(libEx.id));
       if (effectiveLocalLibUpdatedAt && libEx.updatedAt && libEx.updatedAt <= effectiveLocalLibUpdatedAt) {
@@ -1806,6 +1848,8 @@ async function mergeBackupData(data) {
       exerciseSkippedCount,
       libraryCount,
       librarySkippedCount,
+      tombstoneCount,
+      tombstoneSkippedCount,
       sessionsSeen: sessions.length,
       librarySeen: library.length,
     };
@@ -2188,6 +2232,33 @@ async function migrateUsageCountsFromRealData() {
   localStorage.setItem(FLAG, "1");
 }
 
+// Récupère une photo partagée depuis une autre appli (WhatsApp, galerie...) -
+// voir le "share_target" dans manifest.json et handleSharedPhoto dans sw.js,
+// qui a intercepté l'envoi avant qu'il n'atteigne le serveur (impossible sur
+// un hébergement statique comme GitHub Pages) et a mis la photo de côté dans
+// un cache en attendant que l'appli se recharge ici. On ouvre alors
+// directement l'import IA avec cette photo, comme si Christine avait choisi
+// le fichier elle-même.
+async function checkForSharedPhoto() {
+  if (!location.search.includes("photo-partagee=1")) return;
+  // Nettoie l'URL tout de suite, avant même de savoir si une photo est
+  // effectivement présente, pour ne jamais redéclencher ça au prochain
+  // rechargement de la page (ex. après avoir remis l'appli au premier plan).
+  window.history.replaceState({}, "", location.pathname);
+  if (!("caches" in window)) return;
+  try {
+    const cache = await caches.open("carnet-muscu-shared-photo");
+    const response = await cache.match("photo");
+    if (!response) return;
+    await cache.delete("photo");
+    const blob = await response.blob();
+    const file = new File([blob], "photo-partagee.jpg", { type: blob.type || "image/jpeg" });
+    await openAiImportFlow(file);
+  } catch (err) {
+    console.error("[carnet-muscu] échec de la récupération de la photo partagée :", err);
+  }
+}
+
 async function init() {
   await Db.init();
   await migrateFavoritesForAlreadyUsedExercises();
@@ -2432,6 +2503,7 @@ async function init() {
 
   await renderJournal();
   goTo("journal");
+  await checkForSharedPhoto();
 }
 
 document.addEventListener("DOMContentLoaded", init);

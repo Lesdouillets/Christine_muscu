@@ -8,7 +8,11 @@
 //   library       { id, name, type: 'barre'|'halteres'|'poids_du_corps'|'inconnu', gif: {kind:'link'|'file', value} }
 
 const DB_NAME = "carnet-muscu";
-const DB_VERSION = 1;
+// v2 (13/09/2026) : ajoute le magasin "libraryTombstones" - voir le
+// commentaire au-dessus de deleteLibraryExercise plus bas pour le bug que ça
+// corrige (un exercice supprimé, y compris un doublon, qui revenait tout
+// seul à la prochaine synchro).
+const DB_VERSION = 2;
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -27,6 +31,13 @@ function openDb() {
       if (!db.objectStoreNames.contains("library")) {
         const lib = db.createObjectStore("library", { keyPath: "id" });
         lib.createIndex("name", "name");
+      }
+      if (!db.objectStoreNames.contains("libraryTombstones")) {
+        // Garde une trace de chaque exercice de bibliothèque supprimé
+        // (id + date de suppression), pour que la synchro cloud sache qu'il
+        // a été supprimé ICI et ne le réimporte pas depuis un autre appareil
+        // (ou depuis le cloud lui-même) à la synchro suivante.
+        db.createObjectStore("libraryTombstones", { keyPath: "id" });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -353,7 +364,37 @@ const Db = {
   // séances passées n'est pas touché : chaque exerciseSession garde son
   // propre name/type déjà enregistrés, donc rien ne disparaît des séances
   // déjà faites - seul le lien vers cet exercice de bibliothèque est perdu.
+  //
+  // Pose aussi une "tombe" (libraryTombstones) - correctif du 13/09/2026 :
+  // la synchro (mergeBackupData, js/app.js) ne fait qu'ajouter/mettre à jour,
+  // jamais supprimer ("un import ne supprime jamais rien" - volontaire pour
+  // ne jamais perdre une séance). Sans cette tombe, un exercice supprimé ici
+  // revenait donc tout seul dès la synchro suivante : soit parce qu'il était
+  // encore dans le document cloud (jamais informé de la suppression), soit
+  // parce qu'un autre appareil le renvoyait. La tombe dit explicitement à la
+  // fusion "cet id a été supprimé ici à telle date, ne le réimporte pas" -
+  // exactement le souci que Christine a rencontré en nettoyant des doublons
+  // (ex. Back squat).
   async deleteLibraryExercise(id) {
+    const db = this._db;
+    const deletedAt = Date.now();
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["library", "libraryTombstones"], "readwrite");
+      t.objectStore("library").delete(id);
+      t.objectStore("libraryTombstones").put({ id, deletedAt });
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
+    _markRecentLocalWrite(id);
+    this._notifyWrite();
+  },
+
+  // Supprime uniquement l'enregistrement de bibliothèque, sans poser de
+  // tombe ni marquer d'écriture locale récente - réservé à mergeBackupData
+  // qui applique une tombe REÇUE d'ailleurs (voir recordLibraryTombstone) :
+  // la tombe elle-même garde alors la date d'origine de la suppression, pas
+  // "maintenant" sur cet appareil.
+  async deleteLibraryExerciseRecordOnly(id) {
     const db = this._db;
     await new Promise((resolve, reject) => {
       const t = tx(db, ["library"], "readwrite");
@@ -362,6 +403,41 @@ const Db = {
       t.onerror = () => reject(t.error);
     });
     this._notifyWrite();
+  },
+
+  async getAllLibraryTombstones() {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["libraryTombstones"], "readonly");
+      const req = t.objectStore("libraryTombstones").getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async getLibraryTombstone(id) {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["libraryTombstones"], "readonly");
+      const req = t.objectStore("libraryTombstones").get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  // Enregistre (ou met à jour) une tombe reçue d'ailleurs (fichier importé ou
+  // cloud) - ne réécrit jamais avec une date plus ancienne que celle déjà
+  // connue ici, comme pour tout le reste de la fusion.
+  async recordLibraryTombstone(id, deletedAt) {
+    const db = this._db;
+    const existing = await this.getLibraryTombstone(id);
+    if (existing && existing.deletedAt >= deletedAt) return;
+    await new Promise((resolve, reject) => {
+      const t = tx(db, ["libraryTombstones"], "readwrite");
+      t.objectStore("libraryTombstones").put({ id, deletedAt });
+      t.oncomplete = resolve;
+      t.onerror = () => reject(t.error);
+    });
   },
 
   async countLibraryExercises() {
