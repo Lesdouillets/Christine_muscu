@@ -1,5 +1,5 @@
 // Service worker minimal : met en cache la coquille de l'app pour qu'elle
-// s'ouvre même sans réseau. Pas de logique IA ici (ça viendra en phase 4).
+// s'ouvre même sans réseau.
 //
 // Important : stratégie "réseau d'abord, cache en secours" (voir plus bas).
 // Avec l'ancienne stratégie "cache d'abord", une mise à jour livrée sur
@@ -9,12 +9,14 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v20";
+const CACHE_NAME = "carnet-muscu-v21";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
 // plus récente au lieu d'un simple écrasement, pour ne jamais perdre de
 // données entre deux appareils)
+// (v21 : import d'une séance depuis une photo, lue automatiquement par IA -
+// voir js/ai.js - toujours un brouillon à valider avant enregistrement)
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -22,6 +24,7 @@ const APP_SHELL = [
   "./css/app.css",
   "./js/db.js",
   "./js/sync.js",
+  "./js/ai.js",
   "./js/app.js",
   "./data/exercises-library.json",
   "./icons/icon-192.png",

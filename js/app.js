@@ -1793,6 +1793,149 @@ async function importBackup(file) {
   alert(`Import terminé : ${sessionCount} séance(s) et ${libraryCount} exercice(s) de bibliothèque mis à jour (${exerciseCount} exercice(s) de séance).${skippedMsg}`);
 }
 
+// ---------- Import de séance depuis une photo (lecture IA, voir js/ai.js) ----------
+// À la demande de Christine (12/09/2026) : lire une photo (note manuscrite,
+// capture d'écran d'un programme...) pour pré-remplir une séance à venir,
+// sans jamais rien enregistrer avant qu'elle ait validé chaque ligne à
+// l'écran. `aiImportDraft` garde l'état du brouillon en cours pendant que la
+// modale est ouverte (rempli par openAiImportFlow, relu par confirmAiImport).
+let aiImportDraft = null;
+
+function setAiImportModalState(state) {
+  // state : "loading" | "error" | "review"
+  document.getElementById("ai-import-loading").hidden = state !== "loading";
+  document.getElementById("ai-import-error").hidden = state !== "error";
+  document.getElementById("ai-import-review").hidden = state !== "review";
+  document.getElementById("ai-import-review-actions").hidden = state !== "review";
+}
+
+async function openAiImportFlow(file) {
+  aiImportDraft = null;
+  setAiImportModalState("loading");
+  document.getElementById("ai-import-modal").classList.add("open");
+  try {
+    const [result, library] = await Promise.all([analyzeSessionPhoto(file), Db.getAllLibraryExercises()]);
+    if (result.exercises.length === 0) {
+      throw new Error("Aucun exercice n'a été reconnu sur cette photo. Réessaie avec une photo plus nette, ou ajoute la séance à la main.");
+    }
+    aiImportDraft = {
+      title: "Séance importée",
+      tours: result.tours,
+      rows: result.exercises.map((ex) => {
+        const candidates = matchLibraryExercises(ex.name, library);
+        return {
+          rawName: ex.name,
+          reps: ex.reps || 10,
+          note: ex.note || "",
+          candidates,
+          // Une correspondance n'est pré-cochée que si elle est quasi certaine
+          // (nom identique une fois normalisé) - dans le doute, Christine
+          // choisit elle-même plutôt que de valider un mauvais rattachement
+          // sans le remarquer.
+          selectedId: candidates[0] && normalizeForMatch(candidates[0].name) === normalizeForMatch(ex.name) ? candidates[0].id : "",
+          excluded: false,
+        };
+      }),
+    };
+    renderAiImportReview();
+    setAiImportModalState("review");
+  } catch (err) {
+    document.getElementById("ai-import-error-text").textContent = err.message || "Échec de la lecture de la photo.";
+    setAiImportModalState("error");
+  }
+}
+
+function renderAiImportReview() {
+  document.getElementById("ai-import-title-input").value = aiImportDraft.title;
+  document.getElementById("ai-import-tours-input").value = aiImportDraft.tours;
+  const container = document.getElementById("ai-import-rows");
+  container.innerHTML = aiImportDraft.rows
+    .map((row, i) => {
+      const options = row.candidates
+        .map((c) => `<option value="${escapeHtml(c.id)}" ${row.selectedId === c.id ? "selected" : ""}>${escapeHtml(c.name)} (${escapeHtml(typeLabel(c.type))})</option>`)
+        .join("");
+      return `
+        <div class="ai-import-row${row.excluded ? " excluded" : ""}" data-index="${i}">
+          <div class="ai-import-row-raw">Lu sur la photo : <b>${escapeHtml(row.rawName)}</b>${row.note ? ` — ${escapeHtml(row.note)}` : ""}</div>
+          <select class="ai-import-row-select" data-index="${i}">
+            <option value="">— choisir un exercice de la bibliothèque —</option>
+            ${options}
+          </select>
+          <div class="ai-import-row-fields">
+            <input type="number" class="ai-import-row-reps" data-index="${i}" min="1" value="${row.reps}">
+            <input type="text" class="ai-import-row-note" data-index="${i}" placeholder="note (optionnel)" value="${escapeHtml(row.note)}">
+          </div>
+          <label class="ai-import-row-exclude-label">
+            <input type="checkbox" class="ai-import-row-exclude" data-index="${i}" ${row.excluded ? "checked" : ""}>
+            ne pas importer cet exercice
+          </label>
+        </div>`;
+    })
+    .join("");
+  container.querySelectorAll(".ai-import-row-select").forEach((el) =>
+    el.addEventListener("change", (e) => {
+      aiImportDraft.rows[Number(e.target.dataset.index)].selectedId = e.target.value;
+    })
+  );
+  container.querySelectorAll(".ai-import-row-reps").forEach((el) =>
+    el.addEventListener("input", (e) => {
+      aiImportDraft.rows[Number(e.target.dataset.index)].reps = parseInt(e.target.value, 10) || 1;
+    })
+  );
+  container.querySelectorAll(".ai-import-row-note").forEach((el) =>
+    el.addEventListener("input", (e) => {
+      aiImportDraft.rows[Number(e.target.dataset.index)].note = e.target.value;
+    })
+  );
+  container.querySelectorAll(".ai-import-row-exclude").forEach((el) =>
+    el.addEventListener("change", (e) => {
+      const row = aiImportDraft.rows[Number(e.target.dataset.index)];
+      row.excluded = e.target.checked;
+      renderAiImportReview();
+    })
+  );
+}
+
+async function confirmAiImport() {
+  aiImportDraft.title = document.getElementById("ai-import-title-input").value.trim() || "Séance importée";
+  aiImportDraft.tours = parseInt(document.getElementById("ai-import-tours-input").value, 10) || 1;
+  const included = aiImportDraft.rows.filter((r) => !r.excluded);
+  const missing = included.filter((r) => !r.selectedId);
+  if (missing.length > 0) {
+    alert(`Choisis un exercice de bibliothèque pour chaque ligne avant de créer la séance (ou coche « ne pas importer » pour l'ignorer) : ${missing.map((r) => `« ${r.rawName} »`).join(", ")}.`);
+    return;
+  }
+  if (included.length === 0) {
+    alert("Toutes les lignes sont exclues - il n'y aurait aucun exercice dans cette séance.");
+    return;
+  }
+  const library = await Db.getAllLibraryExercises();
+  const session = await Db.addSession({
+    date: new Date().toISOString().slice(0, 10),
+    title: aiImportDraft.title,
+    tours: aiImportDraft.tours,
+  });
+  let order = 0;
+  for (const row of included) {
+    const libEx = library.find((e) => e.id === row.selectedId);
+    if (!libEx) continue;
+    await Db.addExerciseSession({
+      sessionId: session.id,
+      libraryExerciseId: libEx.id,
+      name: libEx.name,
+      type: libEx.type,
+      targetReps: row.reps,
+      order: order++,
+      rounds: [],
+    });
+    await bumpLibraryUsage(libEx.id);
+  }
+  document.getElementById("ai-import-modal").classList.remove("open");
+  aiImportDraft = null;
+  await renderJournal(document.getElementById("journal-search").value);
+  alert(`Séance créée avec ${included.length} exercice(s) - il ne te reste plus qu'à la faire.`);
+}
+
 // ---------- Synchronisation cloud (voir js/sync.js) ----------
 
 function renderSyncSection() {
@@ -2027,6 +2170,26 @@ async function init() {
     e.target.value = ""; // pour pouvoir réimporter le même fichier plus tard si besoin
     if (file) await importBackup(file);
   });
+  // Import de séance depuis une photo, lue par IA (voir js/ai.js) - toujours
+  // un brouillon à valider avant enregistrement (demande de Christine du
+  // 12/09/2026).
+  on("ai-import-cta", "click", () => {
+    document.getElementById("ai-import-file-input").click();
+  });
+  on("ai-import-file-input", "change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ""; // pour pouvoir réimporter la même photo plus tard si besoin
+    if (file) await openAiImportFlow(file);
+  });
+  on("close-ai-import-modal-btn", "click", () => {
+    document.getElementById("ai-import-modal").classList.remove("open");
+    aiImportDraft = null;
+  });
+  on("ai-import-cancel-btn", "click", () => {
+    document.getElementById("ai-import-modal").classList.remove("open");
+    aiImportDraft = null;
+  });
+  on("ai-import-confirm-btn", "click", confirmAiImport);
   // La synchronisation est maintenant dans une modale (bouton ⇅ en haut à
   // droite du journal) plutôt qu'affichée en permanence à l'écran, à la
   // demande de Christine ("c'est trop présent").

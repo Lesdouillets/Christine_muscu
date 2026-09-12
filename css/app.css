@@ -122,6 +122,19 @@ button{font-family:inherit;}
 .lib-detail-rename-btn{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);border-radius:50%;width:30px;height:30px;color:var(--muted);cursor:pointer;}
 .lib-detail-rename-actions{display:flex;gap:8px;margin-top:6px;}
 .lib-detail-rename-actions .primary-btn,.lib-detail-rename-actions .ghost-btn{flex:1;padding:9px;}
+/* Import de séance depuis une photo (lecture IA) - voir js/ai.js et
+   renderAiImportReview dans js/app.js. Une "carte" par exercice détecté,
+   avec ce qui a été lu sur la photo, un choix d'exercice de bibliothèque à
+   valider, et la possibilité d'exclure la ligne. */
+.ai-import-row{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 16px 10px;display:flex;flex-direction:column;gap:8px;background:var(--surface-2);}
+.ai-import-row-raw{font-size:.78rem;color:var(--muted);}
+.ai-import-row-raw b{color:var(--ink);}
+.ai-import-row-fields{display:flex;gap:8px;}
+.ai-import-row-fields select{flex:2;}
+.ai-import-row-fields input[type="number"]{flex:1;min-width:0;}
+.ai-import-row select,.ai-import-row input{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:.85rem;color:var(--ink);font-family:inherit;}
+.ai-import-row-exclude-label{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);}
+.ai-import-row.excluded{opacity:.5;}
 .lib-item:hover{border-color:var(--accent);}
 .lib-item-thumb{width:92px;height:92px;border-radius:10px;background:var(--raised);border:1px solid var(--line);flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;}
 .lib-item-thumb img{width:100%;height:100%;object-fit:cover;}

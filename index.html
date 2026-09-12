@@ -32,10 +32,11 @@
         <input type="text" id="journal-search" placeholder="rechercher un exercice…">
       </div>
     </div>
-    <div class="import-cta">
+    <button type="button" class="import-cta" id="ai-import-cta" style="cursor:pointer;text-align:left;width:calc(100% - 32px);font:inherit;">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-      <span>L'import depuis une photo WhatsApp arrivera dans une prochaine version - pour l'instant, ajoute tes séances à la main.</span>
-    </div>
+      <span>Importer une photo de séance (lue automatiquement par IA) - tu valides avant d'enregistrer.</span>
+    </button>
+    <input type="file" id="ai-import-file-input" accept="image/*" hidden>
     <div class="list" id="session-list"></div>
     <div class="export-row">
       <button class="export-link" id="export-btn">⭳ exporter une sauvegarde</button>
@@ -358,6 +359,39 @@
   </div>
 </div>
 
+<!-- ===== Modale : import de séance depuis une photo, lue par IA - voir js/ai.js
+     et renderAiImportReview/confirmAiImport dans js/app.js. Toujours un
+     brouillon à valider, jamais enregistré automatiquement (demande de
+     Christine du 12/09/2026). ===== -->
+<div class="modal-backdrop" id="ai-import-modal">
+  <div class="modal">
+    <h3>Import depuis une photo</h3>
+    <div id="ai-import-loading">
+      <p class="sync-hint">Lecture de la photo en cours…</p>
+    </div>
+    <div id="ai-import-error" hidden>
+      <p class="sync-hint" id="ai-import-error-text"></p>
+    </div>
+    <div id="ai-import-review" hidden>
+      <div class="field">
+        <span class="field-label">Titre de la séance</span>
+        <input type="text" id="ai-import-title-input">
+      </div>
+      <div class="field">
+        <span class="field-label">Nombre de tours</span>
+        <input type="number" id="ai-import-tours-input" min="1">
+      </div>
+      <div id="ai-import-rows"></div>
+      <p class="sync-hint">Vérifie chaque exercice avant de créer la séance - rien n'est enregistré tant que tu n'as pas cliqué sur « Créer la séance ».</p>
+    </div>
+    <div class="lib-detail-rename-actions" id="ai-import-review-actions" hidden>
+      <button class="primary-btn" id="ai-import-confirm-btn">Créer la séance</button>
+      <button class="ghost-btn" id="ai-import-cancel-btn">Annuler</button>
+    </div>
+    <button class="ghost-btn" id="close-ai-import-modal-btn">Fermer</button>
+  </div>
+</div>
+
 <!-- ===== Modale : ajouter un exercice à la bibliothèque ===== -->
 <div class="modal-backdrop" id="library-add-modal">
   <div class="modal">
@@ -399,6 +433,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="js/db.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

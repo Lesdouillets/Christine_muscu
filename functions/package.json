@@ -1,0 +1,13 @@
+{
+  "name": "carnet-muscu-functions",
+  "description": "Fonction serveur qui garde la clé Gemini côté backend pour l'import de séance par photo (voir index.js).",
+  "engines": {
+    "node": "20"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-functions": "^6.0.1",
+    "firebase-admin": "^12.6.0"
+  },
+  "private": true
+}
