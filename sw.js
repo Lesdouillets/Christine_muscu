@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v32";
+const CACHE_NAME = "carnet-muscu-v33";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -62,6 +62,10 @@ const CACHE_NAME = "carnet-muscu-v32";
 // (v32 : affiche la version installée directement dans la modale de
 // synchro - à la demande de Christine, pour vérifier facilement qu'une
 // mise à jour a bien été récupérée, sans passer par le bouton diagnostic)
+// (v33 : le partage WhatsApp restait silencieux même appli fermée - ajoute
+// une trace de diagnostic persistante (visible dans la modale de synchro)
+// pour savoir, sans câble USB, si la redirection/le message est seulement
+// reçu et si une photo est bien retrouvée dans le cache)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",

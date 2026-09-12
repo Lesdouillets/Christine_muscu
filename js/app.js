@@ -2089,7 +2089,27 @@ async function renderAppVersionLabel() {
   try {
     const keys = await caches.keys();
     const appCache = keys.find((k) => /^carnet-muscu-v\d+$/.test(k));
-    el.textContent = appCache ? `Version installée : ${appCache.replace("carnet-muscu-", "")}` : "";
+    let text = appCache ? `Version installée : ${appCache.replace("carnet-muscu-", "")}` : "";
+    // Trace du dernier partage reçu (voir recordShareDebug/consumeSharedPhotoFromCache
+    // ci-dessous) - pour diagnostiquer un partage WhatsApp silencieux sans
+    // avoir besoin d'un câble USB ou de la console du téléphone.
+    try {
+      const raw = localStorage.getItem("carnet-muscu-share-debug");
+      if (raw) {
+        const d = JSON.parse(raw);
+        const when = new Date(d.at).toLocaleString("fr-FR");
+        let detail;
+        if (d.error) detail = `erreur (${d.error})`;
+        else if (d.markerPresent === false) detail = "aucun partage détecté depuis la dernière ouverture";
+        else if (d.cacheHit === true) detail = `photo reçue et ouverte (${d.blobSize} octets, ${d.blobType || "?"})`;
+        else if (d.cacheHit === false) detail = "signal de partage reçu, mais aucune photo trouvée dans le cache";
+        else detail = "partage détecté";
+        text += `\nDernier partage (${d.source === "message" ? "appli déjà ouverte" : "nouvelle ouverture"}, ${when}) : ${detail}`;
+      }
+    } catch (err) {
+      // pas grave, purement informatif
+    }
+    el.textContent = text;
   } catch (err) {
     el.textContent = "";
   }
@@ -2292,28 +2312,59 @@ async function migrateUsageCountsFromRealData() {
 //    SANS jamais lui faire charger cette URL - la méthode 1) ne se déclenche
 //    donc jamais. sw.js prévient dans ce cas directement la page ouverte par
 //    un message (postMessage), écouté plus bas sur navigator.serviceWorker.
-async function consumeSharedPhotoFromCache() {
-  if (!("caches" in window)) return;
+// Trace de diagnostic persistante (à la demande implicite du 14/09/2026 :
+// partage encore silencieux malgré les correctifs v29-v32, sans moyen de
+// voir ce qui se passe réellement sur le téléphone). Enregistrée dans
+// localStorage à CHAQUE tentative (succès ou échec), et affichée dans la
+// modale de synchro (voir renderAppVersionLabel) - permet de savoir, sans
+// console ni câble USB, si la redirection/le message a seulement été REÇU
+// (indépendamment de la présence d'une vraie photo dans le cache).
+function recordShareDebug(fields) {
+  try {
+    localStorage.setItem(
+      "carnet-muscu-share-debug",
+      JSON.stringify({ at: new Date().toISOString(), ...fields })
+    );
+  } catch (err) {
+    // pas grave, purement informatif
+  }
+}
+
+async function consumeSharedPhotoFromCache(source) {
+  if (!("caches" in window)) {
+    recordShareDebug({ source, cachesApi: false });
+    return;
+  }
   try {
     const cache = await caches.open("carnet-muscu-shared-photo");
     const response = await cache.match("photo");
-    if (!response) return;
+    if (!response) {
+      recordShareDebug({ source, cachesApi: true, cacheHit: false });
+      return;
+    }
     await cache.delete("photo");
     const blob = await response.blob();
     const file = new File([blob], "photo-partagee.jpg", { type: blob.type || "image/jpeg" });
+    recordShareDebug({ source, cachesApi: true, cacheHit: true, blobSize: blob.size, blobType: blob.type });
     await openAiImportFlow(file);
   } catch (err) {
     console.error("[carnet-muscu] échec de la récupération de la photo partagée :", err);
+    recordShareDebug({ source, error: String(err && err.message ? err.message : err) });
   }
 }
 
 async function checkForSharedPhoto() {
+  // Enregistré à CHAQUE démarrage de l'appli, marqueur présent ou non - la
+  // question à trancher est justement de savoir si ce marqueur (posé par la
+  // redirection de handleSharedPhoto dans sw.js) arrive jusqu'ici après un
+  // partage, ou s'il se perd avant.
+  recordShareDebug({ source: "url", markerPresent: location.search.includes("photo-partagee=1"), fullSearch: location.search });
   if (!location.search.includes("photo-partagee=1")) return;
   // Nettoie l'URL tout de suite, avant même de savoir si une photo est
   // effectivement présente, pour ne jamais redéclencher ça au prochain
   // rechargement de la page (ex. après avoir remis l'appli au premier plan).
   window.history.replaceState({}, "", location.pathname);
-  await consumeSharedPhotoFromCache();
+  await consumeSharedPhotoFromCache("url");
 }
 
 // Cas 2) ci-dessus : l'appli était déjà ouverte, sw.js le signale directement
@@ -2321,7 +2372,7 @@ async function checkForSharedPhoto() {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", (event) => {
     if (event.data && event.data.type === "carnet-muscu-shared-photo") {
-      consumeSharedPhotoFromCache();
+      consumeSharedPhotoFromCache("message");
     }
   });
 }
