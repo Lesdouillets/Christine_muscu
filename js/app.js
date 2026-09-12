@@ -2075,6 +2075,26 @@ async function confirmAiImport() {
 
 // ---------- Synchronisation cloud (voir js/sync.js) ----------
 
+// Affiche la version du cache directement dans la modale de synchro (à la
+// demande de Christine le 14/09/2026 : "comment je sais si je suis en
+// v31 ?") - plus besoin du bouton de diagnostic pour vérifier qu'une mise à
+// jour a bien été récupérée après avoir fermé/rouvert l'appli.
+async function renderAppVersionLabel() {
+  const el = document.getElementById("app-version-label");
+  if (!el) return;
+  if (!("caches" in window)) {
+    el.textContent = "";
+    return;
+  }
+  try {
+    const keys = await caches.keys();
+    const appCache = keys.find((k) => /^carnet-muscu-v\d+$/.test(k));
+    el.textContent = appCache ? `Version installée : ${appCache.replace("carnet-muscu-", "")}` : "";
+  } catch (err) {
+    el.textContent = "";
+  }
+}
+
 function renderSyncSection() {
   const code = getSyncCode();
   document.getElementById("sync-setup").hidden = !!code;
@@ -2087,6 +2107,7 @@ function renderSyncSection() {
       ? `Dernière synchro sur cet appareil : ${last}`
       : "Pas encore synchronisé depuis cet appareil.";
   }
+  renderAppVersionLabel();
 }
 
 // Enveloppe un bouton de sync : désactive pendant l'appel (les allers-retours

@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v31";
+const CACHE_NAME = "carnet-muscu-v32";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -59,6 +59,9 @@ const CACHE_NAME = "carnet-muscu-v31";
 // contentait de ramener cette fenêtre au premier plan sans lui faire
 // charger la redirection. sw.js prévient maintenant directement toute
 // fenêtre déjà ouverte par un message, en plus de la redirection)
+// (v32 : affiche la version installée directement dans la modale de
+// synchro - à la demande de Christine, pour vérifier facilement qu'une
+// mise à jour a bien été récupérée, sans passer par le bouton diagnostic)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
