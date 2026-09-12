@@ -43,6 +43,16 @@
       <button class="export-link" id="import-btn">⭴ importer une sauvegarde</button>
       <input type="file" id="import-file-input" accept="application/json" hidden>
     </div>
+    <!-- Outil de diagnostic temporaire (13/09/2026) : Christine a remarqué
+         des favoris manquants/qui reviennent après suppression, sans pouvoir
+         ouvrir la console de son téléphone pour regarder elle-même. Ce
+         bouton affiche directement à l'écran ce qu'il y a vraiment dans sa
+         bibliothèque (nombre de favoris, doublons de noms) - voir
+         diagnoseFavorites dans js/app.js. À retirer une fois le problème
+         élucidé. -->
+    <div class="export-row">
+      <button class="export-link" id="diagnose-fav-btn">🔍 diagnostiquer les favoris</button>
+    </div>
 
     <div class="bottomnav">
       <button class="navitem" data-nav="journal">
@@ -378,8 +388,16 @@
         <input type="text" id="ai-import-title-input">
       </div>
       <div class="field">
+        <span class="field-label">Date</span>
+        <input type="date" id="ai-import-date-input">
+      </div>
+      <div class="field">
         <span class="field-label">Nombre de tours</span>
-        <input type="number" id="ai-import-tours-input" min="1">
+        <div class="stepper">
+          <button type="button" class="stepper-btn" id="ai-import-tours-minus" aria-label="Moins de tours">−</button>
+          <input type="number" id="ai-import-tours-input" min="1" max="10" readonly>
+          <button type="button" class="stepper-btn" id="ai-import-tours-plus" aria-label="Plus de tours">+</button>
+        </div>
       </div>
       <div id="ai-import-rows"></div>
       <p class="sync-hint">Vérifie chaque exercice avant de créer la séance - rien n'est enregistré tant que tu n'as pas cliqué sur « Créer la séance ».</p>

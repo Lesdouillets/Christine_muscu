@@ -1820,6 +1820,7 @@ async function openAiImportFlow(file) {
     }
     aiImportDraft = {
       title: "Séance importée",
+      date: todayIso(),
       tours: result.tours,
       rows: result.exercises.map((ex) => {
         const candidates = matchLibraryExercises(ex.name, library);
@@ -1845,8 +1846,21 @@ async function openAiImportFlow(file) {
   }
 }
 
+// Vignette GIF pour une ligne du brouillon d'import, comme quand on ajoute
+// un exercice à la main (demande de Christine du 12/09/2026) - montre le
+// GIF de l'exercice actuellement sélectionné dans le menu déroulant, ou un
+// espace vide si rien n'est choisi ou si cet exercice n'a pas de GIF.
+function aiImportRowGifHtml(row) {
+  const selected = row.candidates.find((c) => c.id === row.selectedId);
+  const gifUrl = selected ? gifUrlOf(selected) : null;
+  return gifUrl
+    ? `<img src="${gifUrl}" alt="" loading="lazy">`
+    : `<div class="ai-import-row-noGif">pas de démonstration</div>`;
+}
+
 function renderAiImportReview() {
   document.getElementById("ai-import-title-input").value = aiImportDraft.title;
+  document.getElementById("ai-import-date-input").value = aiImportDraft.date;
   document.getElementById("ai-import-tours-input").value = aiImportDraft.tours;
   const container = document.getElementById("ai-import-rows");
   container.innerHTML = aiImportDraft.rows
@@ -1857,13 +1871,18 @@ function renderAiImportReview() {
       return `
         <div class="ai-import-row${row.excluded ? " excluded" : ""}" data-index="${i}">
           <div class="ai-import-row-raw">Lu sur la photo : <b>${escapeHtml(row.rawName)}</b>${row.note ? ` — ${escapeHtml(row.note)}` : ""}</div>
-          <select class="ai-import-row-select" data-index="${i}">
-            <option value="">— choisir un exercice de la bibliothèque —</option>
-            ${options}
-          </select>
-          <div class="ai-import-row-fields">
-            <input type="number" class="ai-import-row-reps" data-index="${i}" min="1" value="${row.reps}">
-            <input type="text" class="ai-import-row-note" data-index="${i}" placeholder="note (optionnel)" value="${escapeHtml(row.note)}">
+          <div class="ai-import-row-main">
+            <div class="ai-import-row-gif" data-index="${i}">${aiImportRowGifHtml(row)}</div>
+            <div class="ai-import-row-fields-wrap">
+              <select class="ai-import-row-select" data-index="${i}">
+                <option value="">— choisir un exercice de la bibliothèque —</option>
+                ${options}
+              </select>
+              <div class="ai-import-row-fields">
+                <input type="number" class="ai-import-row-reps" data-index="${i}" min="1" value="${row.reps}">
+                <input type="text" class="ai-import-row-note" data-index="${i}" placeholder="note (optionnel)" value="${escapeHtml(row.note)}">
+              </div>
+            </div>
           </div>
           <label class="ai-import-row-exclude-label">
             <input type="checkbox" class="ai-import-row-exclude" data-index="${i}" ${row.excluded ? "checked" : ""}>
@@ -1874,7 +1893,10 @@ function renderAiImportReview() {
     .join("");
   container.querySelectorAll(".ai-import-row-select").forEach((el) =>
     el.addEventListener("change", (e) => {
-      aiImportDraft.rows[Number(e.target.dataset.index)].selectedId = e.target.value;
+      const idx = Number(e.target.dataset.index);
+      aiImportDraft.rows[idx].selectedId = e.target.value;
+      const gifDiv = container.querySelector(`.ai-import-row-gif[data-index="${idx}"]`);
+      if (gifDiv) gifDiv.innerHTML = aiImportRowGifHtml(aiImportDraft.rows[idx]);
     })
   );
   container.querySelectorAll(".ai-import-row-reps").forEach((el) =>
@@ -1896,8 +1918,20 @@ function renderAiImportReview() {
   );
 }
 
+// Stepper +/- pour le nombre de tours du brouillon d'import (même logique
+// que stepNewSessionTours pour la création manuelle d'une séance).
+function stepAiImportTours(delta) {
+  const input = document.getElementById("ai-import-tours-input");
+  const min = parseInt(input.min, 10) || 1;
+  const max = parseInt(input.max, 10) || 10;
+  const next = Math.min(max, Math.max(min, (parseInt(input.value, 10) || min) + delta));
+  input.value = next;
+  aiImportDraft.tours = next;
+}
+
 async function confirmAiImport() {
   aiImportDraft.title = document.getElementById("ai-import-title-input").value.trim() || "Séance importée";
+  aiImportDraft.date = document.getElementById("ai-import-date-input").value || todayIso();
   aiImportDraft.tours = parseInt(document.getElementById("ai-import-tours-input").value, 10) || 1;
   const included = aiImportDraft.rows.filter((r) => !r.excluded);
   const missing = included.filter((r) => !r.selectedId);
@@ -1911,7 +1945,7 @@ async function confirmAiImport() {
   }
   const library = await Db.getAllLibraryExercises();
   const session = await Db.addSession({
-    date: new Date().toISOString().slice(0, 10),
+    date: aiImportDraft.date || todayIso(),
     title: aiImportDraft.title,
     tours: aiImportDraft.tours,
   });
@@ -1983,6 +2017,41 @@ function on(id, event, handler) {
   const el = document.getElementById(id);
   if (el) el.addEventListener(event, handler);
   else console.warn(`[carnet-muscu] élément #${id} introuvable - vérifie que la page est à jour (ferme et rouvre l'appli).`);
+}
+
+// Outil de diagnostic temporaire (13/09/2026) : Christine a l'impression que
+// des exercices favoris disparaissent, et qu'un favori enlevé revient tout
+// seul, sans pouvoir ouvrir la console de son téléphone pour vérifier
+// elle-même ce qu'il y a réellement dans sa bibliothèque. Affiche à l'écran :
+// le nombre réel de favoris, et surtout les doublons de noms (deux
+// enregistrements différents pour le même exercice, l'un favori et l'autre
+// non, ce qui donnerait exactement l'impression d'un favori qui "revient" -
+// on agirait alors sur l'un des deux sans le savoir). À retirer une fois le
+// problème élucidé.
+async function diagnoseFavorites() {
+  const all = await Db.getAllLibraryExercises();
+  const favs = all.filter((ex) => ex.favorite);
+  const byName = new Map();
+  for (const ex of all) {
+    const key = ex.name.trim().toLowerCase();
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(ex);
+  }
+  const dupes = [...byName.values()].filter((group) => group.length > 1);
+  let msg = `${all.length} exercices au total dans la bibliothèque, dont ${favs.length} en favori.`;
+  if (dupes.length > 0) {
+    msg += `\n\n⚠️ ${dupes.length} nom(s) en double (deux fiches différentes pour le même exercice) :\n`;
+    msg += dupes
+      .slice(0, 15)
+      .map((group) => `- « ${group[0].name} » : ${group.map((e) => `${e.id} (favori: ${e.favorite ? "oui" : "non"})`).join(" / ")}`)
+      .join("\n");
+    if (dupes.length > 15) msg += `\n… et ${dupes.length - 15} de plus.`;
+  } else {
+    msg += "\n\nAucun doublon de nom trouvé.";
+  }
+  msg += `\n\nListe des favoris actuels :\n${favs.map((e) => `- ${e.name}`).join("\n") || "(aucun)"}`;
+  alert(msg);
+  console.log("[diagnostic favoris]", { total: all.length, favCount: favs.length, dupes });
 }
 
 // Migration ponctuelle (une seule fois par appareil) : les exercices déjà
@@ -2161,6 +2230,7 @@ async function init() {
     document.getElementById("new-exercise-reps-value").textContent = newExerciseReps;
   });
   on("journal-search", "input", (e) => renderJournal(e.target.value));
+  on("diagnose-fav-btn", "click", diagnoseFavorites);
   on("export-btn", "click", exportSessions);
   on("import-btn", "click", () => {
     document.getElementById("import-file-input").click();
@@ -2190,6 +2260,8 @@ async function init() {
     aiImportDraft = null;
   });
   on("ai-import-confirm-btn", "click", confirmAiImport);
+  on("ai-import-tours-minus", "click", () => stepAiImportTours(-1));
+  on("ai-import-tours-plus", "click", () => stepAiImportTours(1));
   // La synchronisation est maintenant dans une modale (bouton ⇅ en haut à
   // droite du journal) plutôt qu'affichée en permanence à l'écran, à la
   // demande de Christine ("c'est trop présent").

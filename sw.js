@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v23";
+const CACHE_NAME = "carnet-muscu-v24";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -23,6 +23,9 @@ const CACHE_NAME = "carnet-muscu-v23";
 // adresse provisoire "<A_COMPLETER>" n'avait jamais été remplacée par la
 // vraie, donc l'import IA échouait toujours en pratique malgré des tests
 // serveur qui, eux, passaient)
+// (v24 : import IA - date modifiable, stepper +/- pour les tours, GIF affiché
+// pour l'exercice choisi ; ajoute un bouton temporaire "diagnostiquer les
+// favoris" pour comprendre le souci de favoris qui disparaissent/reviennent)
 const APP_SHELL = [
   "./",
   "./index.html",
