@@ -196,6 +196,21 @@ async function buildCloudSyncPayload() {
 async function pushBackupToCloud() {
   const code = getSyncCode();
   if (!code) throw new Error("Aucun code de synchronisation configuré.");
+  // Avant d'envoyer, on récupère et fusionne d'abord ce qui est déjà dans le
+  // cloud : Firestore .set() remplace tout le document, donc envoyer
+  // directement un instantané local qui ne connaît pas encore un changement
+  // fait sur l'autre appareil (et pas encore reçu ici, ex. réseau coupé un
+  // moment) l'effacerait purement et simplement au prochain envoi - c'est
+  // exactement la perte de données que Christine a demandé d'éliminer
+  // (12/09/2026 : "je ne veux pas perdre des données, ne jamais prendre les
+  // données en cache ou en local [plutôt que la version la plus récente]").
+  // mergeBackupData ne fusionne que ce qui est plus récent (par updatedAt) et
+  // n'efface jamais rien localement, donc cette étape ne peut qu'ajouter des
+  // données manquantes ici, jamais en perdre.
+  const remoteSnap = await getFirestore().collection("syncs").doc(code).get();
+  if (remoteSnap.exists) {
+    await mergeBackupData(remoteSnap.data());
+  }
   const payload = await buildCloudSyncPayload();
   const json = JSON.stringify(payload);
   // Une limite Firestore existe par document (1 Mo). Une fois le catalogue

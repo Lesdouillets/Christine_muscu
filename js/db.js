@@ -72,7 +72,7 @@ const Db = {
 
   async addSession(session) {
     const db = this._db;
-    const record = { id: uid(), ...session };
+    const record = { id: uid(), updatedAt: Date.now(), ...session };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["sessions"], "readwrite");
       t.objectStore("sessions").add(record);
@@ -83,11 +83,21 @@ const Db = {
     return record;
   },
 
-  async updateSession(session) {
+  // `opts.preserveTimestamp` : utilisé UNIQUEMENT par la fusion de synchro
+  // (mergeBackupData, js/app.js) pour réappliquer un enregistrement déjà
+  // reçu d'un autre appareil sans écraser son horodatage d'origine par
+  // "maintenant" - cet horodatage est ce qui permet de départager deux
+  // versions divergentes de la même séance lors d'une prochaine fusion (voir
+  // la robustesse de la synchro, demandée par Christine le 12/09/2026). Un
+  // vrai changement fait ICI, sur cet appareil (renommer, changer le nombre
+  // de tours...), doit toujours obtenir un horodatage frais - c'est le
+  // comportement par défaut, sans avoir besoin de le préciser à chaque appel.
+  async updateSession(session, opts = {}) {
     const db = this._db;
+    const record = opts.preserveTimestamp ? session : { ...session, updatedAt: Date.now() };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["sessions"], "readwrite");
-      t.objectStore("sessions").put(session);
+      t.objectStore("sessions").put(record);
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
@@ -117,7 +127,7 @@ const Db = {
 
   async addExerciseSession(exerciseSession) {
     const db = this._db;
-    const record = { id: uid(), ...exerciseSession };
+    const record = { id: uid(), updatedAt: Date.now(), ...exerciseSession };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["exerciseSessions"], "readwrite");
       t.objectStore("exerciseSessions").add(record);
@@ -128,11 +138,14 @@ const Db = {
     return record;
   },
 
-  async updateExerciseSession(exerciseSession) {
+  // Voir le commentaire sur `opts.preserveTimestamp` au niveau de
+  // updateSession ci-dessus - même principe ici.
+  async updateExerciseSession(exerciseSession, opts = {}) {
     const db = this._db;
+    const record = opts.preserveTimestamp ? exerciseSession : { ...exerciseSession, updatedAt: Date.now() };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["exerciseSessions"], "readwrite");
-      t.objectStore("exerciseSessions").put(exerciseSession);
+      t.objectStore("exerciseSessions").put(record);
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });
@@ -192,6 +205,18 @@ const Db = {
     });
   },
 
+  // Un seul exercice de séance par son id (sert à la fusion de synchro pour
+  // comparer les horodatages avant d'écraser - voir mergeBackupData, js/app.js).
+  async getExerciseSession(id) {
+    const db = this._db;
+    return new Promise((resolve, reject) => {
+      const t = tx(db, ["exerciseSessions"], "readonly");
+      const req = t.objectStore("exerciseSessions").get(id);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
   async getExerciseSessionsForSession(sessionId) {
     const db = this._db;
     return new Promise((resolve, reject) => {
@@ -226,7 +251,7 @@ const Db = {
 
   async addLibraryExercise(exercise) {
     const db = this._db;
-    const record = { id: uid(), ...exercise };
+    const record = { id: uid(), updatedAt: Date.now(), ...exercise };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["library"], "readwrite");
       t.objectStore("library").add(record);
@@ -255,11 +280,14 @@ const Db = {
     return all.filter((e) => e.name.toLowerCase().includes(q));
   },
 
-  async updateLibraryExercise(exercise) {
+  // Voir le commentaire sur `opts.preserveTimestamp` au niveau de
+  // updateSession plus haut - même principe ici.
+  async updateLibraryExercise(exercise, opts = {}) {
     const db = this._db;
+    const record = opts.preserveTimestamp ? exercise : { ...exercise, updatedAt: Date.now() };
     await new Promise((resolve, reject) => {
       const t = tx(db, ["library"], "readwrite");
-      t.objectStore("library").put(exercise);
+      t.objectStore("library").put(record);
       t.oncomplete = resolve;
       t.onerror = () => reject(t.error);
     });

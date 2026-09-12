@@ -1701,15 +1701,38 @@ async function mergeBackupData(data) {
     const sessions = Array.isArray(data) ? data : Array.isArray(data.sessions) ? data.sessions : [];
     const library = Array.isArray(data.library) ? data.library : [];
 
-    let sessionCount = 0, exerciseCount = 0;
+    // Règle de fusion, identique pour séances / exercices de séance /
+    // bibliothèque : on ne prend un enregistrement venu d'ailleurs (fichier
+    // importé ou cloud) que s'il est plus récent que la version déjà présente
+    // sur cet appareil (updatedAt). Sinon on le saute - la version locale est
+    // gardée telle quelle. Objectif explicite de Christine (12/09/2026) :
+    // "je ne veux pas perdre de données, ne jamais prendre les données en
+    // cache ou en local [à la place d'une version plus récente]". On ne
+    // supprime jamais rien ici (mergeBackupData n'efface jamais un
+    // enregistrement absent du payload reçu - seul un vrai bouton
+    // "supprimer" le fait). `{preserveTimestamp: true}` : on réapplique
+    // l'horodatage d'origine de l'enregistrement reçu, pas "maintenant" -
+    // sinon une prochaine fusion ne pourrait plus jamais départager deux
+    // versions correctement (voir le commentaire sur updateSession, js/db.js).
+    let sessionCount = 0, sessionSkippedCount = 0, exerciseCount = 0, exerciseSkippedCount = 0;
     for (const s of sessions) {
       if (!s || !s.id) continue;
       const { exercises, ...sessionFields } = s;
-      await Db.updateSession(sessionFields);
-      sessionCount++;
+      const localSession = await Db.getSession(s.id);
+      if (localSession && localSession.updatedAt && sessionFields.updatedAt && sessionFields.updatedAt < localSession.updatedAt) {
+        sessionSkippedCount++;
+      } else {
+        await Db.updateSession(sessionFields, { preserveTimestamp: true });
+        sessionCount++;
+      }
       for (const ex of exercises || []) {
         if (!ex || !ex.id) continue;
-        await Db.updateExerciseSession(ex);
+        const localEx = await Db.getExerciseSession(ex.id);
+        if (localEx && localEx.updatedAt && ex.updatedAt && ex.updatedAt < localEx.updatedAt) {
+          exerciseSkippedCount++;
+          continue;
+        }
+        await Db.updateExerciseSession(ex, { preserveTimestamp: true });
         exerciseCount++;
       }
     }
@@ -1721,7 +1744,7 @@ async function mergeBackupData(data) {
         librarySkippedCount++;
         continue;
       }
-      await Db.updateLibraryExercise(libEx);
+      await Db.updateLibraryExercise(libEx, { preserveTimestamp: true });
       libraryCount++;
     }
 
@@ -1729,7 +1752,16 @@ async function mergeBackupData(data) {
     if (document.getElementById("view-library").classList.contains("active")) {
       await renderLibrary(document.getElementById("library-search").value);
     }
-    return { sessionCount, exerciseCount, libraryCount, librarySkippedCount, sessionsSeen: sessions.length, librarySeen: library.length };
+    return {
+      sessionCount,
+      sessionSkippedCount,
+      exerciseCount,
+      exerciseSkippedCount,
+      libraryCount,
+      librarySkippedCount,
+      sessionsSeen: sessions.length,
+      librarySeen: library.length,
+    };
   } finally {
     Db._onWrite = savedWriteHook;
   }
