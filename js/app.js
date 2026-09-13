@@ -2105,6 +2105,12 @@ async function renderAppVersionLabel() {
         else if (d.cacheHit === false) detail = "signal de partage reçu, mais aucune photo trouvée dans le cache";
         else detail = "partage détecté";
         text += `\nDernier partage (${d.source === "message" ? "appli déjà ouverte" : "nouvelle ouverture"}, ${when}) : ${detail}`;
+        // Détail côté service worker (voir handleSharedPhoto dans sw.js) -
+        // dit précisément ce qu'Android a envoyé et pourquoi la lecture a
+        // échoué, quand elle a échoué.
+        if (d.swDebug) {
+          text += `\nDétail technique : ${JSON.stringify(d.swDebug)}`;
+        }
       }
     } catch (err) {
       // pas grave, purement informatif
@@ -2330,6 +2336,22 @@ function recordShareDebug(fields) {
   }
 }
 
+// Récupère la trace détaillée déposée côté service worker (voir sw.js,
+// handleSharedPhoto) - c'est la seule façon pour lui de faire remonter un
+// diagnostic (il n'a pas accès à localStorage), et c'est ce qui dit
+// précisément pourquoi une photo n'a pas pu être lue (champ absent, format
+// inattendu, erreur de lecture...) plutôt que juste "rien trouvé".
+async function readSwShareDebug(cache) {
+  try {
+    const resp = await cache.match("debug");
+    if (!resp) return null;
+    await cache.delete("debug");
+    return await resp.json();
+  } catch (err) {
+    return null;
+  }
+}
+
 async function consumeSharedPhotoFromCache(source) {
   if (!("caches" in window)) {
     recordShareDebug({ source, cachesApi: false });
@@ -2337,15 +2359,16 @@ async function consumeSharedPhotoFromCache(source) {
   }
   try {
     const cache = await caches.open("carnet-muscu-shared-photo");
+    const swDebug = await readSwShareDebug(cache);
     const response = await cache.match("photo");
     if (!response) {
-      recordShareDebug({ source, cachesApi: true, cacheHit: false });
+      recordShareDebug({ source, cachesApi: true, cacheHit: false, swDebug });
       return;
     }
     await cache.delete("photo");
     const blob = await response.blob();
     const file = new File([blob], "photo-partagee.jpg", { type: blob.type || "image/jpeg" });
-    recordShareDebug({ source, cachesApi: true, cacheHit: true, blobSize: blob.size, blobType: blob.type });
+    recordShareDebug({ source, cachesApi: true, cacheHit: true, blobSize: blob.size, blobType: blob.type, swDebug });
     await openAiImportFlow(file);
   } catch (err) {
     console.error("[carnet-muscu] échec de la récupération de la photo partagée :", err);

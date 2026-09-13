@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v33";
+const CACHE_NAME = "carnet-muscu-v34";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -66,6 +66,15 @@ const CACHE_NAME = "carnet-muscu-v33";
 // une trace de diagnostic persistante (visible dans la modale de synchro)
 // pour savoir, sans câble USB, si la redirection/le message est seulement
 // reçu et si une photo est bien retrouvée dans le cache)
+// (v34 : le diagnostic v33 a montré que le signal de partage arrive bien
+// (redirection + message reçus) mais qu'aucune photo n'est jamais trouvée
+// dans le cache - la trace v33 ne pouvait pas dire pourquoi, puisque tout
+// se passe dans handleSharedPhoto() ci-dessous, côté service worker, sans
+// accès à localStorage. Ajoute une trace technique détaillée (Cache API,
+// clé "debug") : type de contenu reçu, noms des champs du formulaire,
+// présence/type/taille du champ "photo", ou l'erreur exacte si la lecture
+// a échoué - relue et affichée par consumeSharedPhotoFromCache/
+// renderAppVersionLabel dans js/app.js)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
@@ -114,9 +123,24 @@ self.addEventListener("activate", (event) => {
 // checkForSharedPhoto dans js/app.js).
 async function handleSharedPhoto(request) {
   let stored = false;
+  // Diagnostic (v34, 13/09/2026) : le catch ci-dessous avalait silencieusement
+  // toute erreur - Christine a confirmé que le signal de partage arrive bien
+  // (redirection + message reçus), mais qu'aucune photo n'est jamais trouvée
+  // dans le cache. Cette trace, elle, dit précisément POURQUOI la lecture du
+  // fichier a échoué (contrairement à localStorage, un service worker ne peut
+  // écrire son diagnostic que dans le Cache API - consumeSharedPhotoFromCache
+  // dans js/app.js la relit et la fusionne avec sa propre trace).
+  const debugInfo = { contentType: request.headers.get("content-type") || null };
   try {
     const formData = await request.formData();
+    debugInfo.formDataKeys = [...formData.keys()];
     const file = formData.get("photo");
+    debugInfo.hasPhotoField = !!file;
+    if (file) {
+      debugInfo.photoIsFile = typeof file.arrayBuffer === "function";
+      debugInfo.photoType = file.type;
+      debugInfo.photoSize = file.size;
+    }
     if (file && typeof file.arrayBuffer === "function") {
       const cache = await caches.open(SHARE_CACHE);
       await cache.put(
@@ -128,6 +152,13 @@ async function handleSharedPhoto(request) {
   } catch (err) {
     // Partage sans photo exploitable (ex. juste du texte) - on redirige quand
     // même vers l'appli plutôt que de laisser une erreur s'afficher.
+    debugInfo.error = String((err && err.message) || err);
+  }
+  try {
+    const cache = await caches.open(SHARE_CACHE);
+    await cache.put("debug", new Response(JSON.stringify(debugInfo), { headers: { "Content-Type": "application/json" } }));
+  } catch (err) {
+    // pas grave, purement informatif
   }
   // Si une fenêtre de l'appli est déjà ouverte (en arrière-plan par exemple),
   // Android/Chrome se contente souvent de la ramener au premier plan SANS
