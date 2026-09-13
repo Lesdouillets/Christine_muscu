@@ -118,6 +118,65 @@ function matchesSearch(name, rawQ) {
   return false;
 }
 
+// Score de pertinence pour trier les résultats de recherche (à la demande de
+// Christine du 13/09/2026 : "on tape fentes et il y a plein d'exercices où
+// il n'y a pas écrit fente qui remontent" - avant ce correctif, les
+// résultats matchesSearch() étaient toujours triés par ordre alphabétique,
+// sans distinction entre une correspondance directe/exacte et une
+// correspondance lointaine via le dictionnaire de synonymes noyée au milieu
+// d'un nom à rallonge). Renvoie un nombre plus grand = plus pertinent, ou
+// -1 si aucune correspondance (ne devrait pas arriver sur un résultat déjà
+// filtré par matchesSearch, mais reste défensif).
+function searchRelevanceScore(name, rawQ) {
+  const n = stripAccents(name.toLowerCase());
+  const q = stripAccents(rawQ.toLowerCase());
+  if (!q) return 0;
+  const wordBoundaryHas = (term) => new RegExp(`(^|[^a-z0-9])${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(n);
+  const rankFor = (term) => {
+    if (!term || !n.includes(term)) return -1;
+    if (n === term) return 4; // nom strictement identique au terme
+    if (n.startsWith(term + " ")) return 3.5; // le nom commence par le terme
+    if (wordBoundaryHas(term)) return 3; // le terme apparaît en entier ailleurs dans le nom
+    return 1; // simple sous-chaîne (ex. "lunge" dans "lunges", peu probable ici mais defensif)
+  };
+  let best = rankFor(q);
+  if (q.length >= 3) {
+    for (const key in SEARCH_SYNONYMS) {
+      const k = stripAccents(key);
+      if (q.includes(k) || k.includes(q)) {
+        for (const term of SEARCH_SYNONYMS[key]) {
+          const r = rankFor(stripAccents(term));
+          if (r > best) best = r;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+// Trie une liste d'exercices par pertinence par rapport à la recherche tapée
+// (correspondance la plus directe/simple d'abord, puis les noms les plus
+// courts - un nom court qui contient le terme cherché lui est en général
+// plus directement lié qu'un nom à rallonge combinant plusieurs mouvements),
+// et à égalité par ordre alphabétique comme avant.
+function sortByRelevance(results, rawQ) {
+  const q = (rawQ || "").trim();
+  if (!q) {
+    results.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+    return results;
+  }
+  results.sort((a, b) => {
+    const ra = searchRelevanceScore(a.name, q);
+    const rb = searchRelevanceScore(b.name, q);
+    if (rb !== ra) return rb - ra;
+    const wa = a.name.trim().split(/\s+/).length;
+    const wb = b.name.trim().split(/\s+/).length;
+    if (wa !== wb) return wa - wb;
+    return a.name.localeCompare(b.name, "fr", { sensitivity: "base" });
+  });
+  return results;
+}
+
 function gifUrlOf(libEx) {
   if (!libEx || !libEx.gif) return null;
   return libEx.gif.value || null;
@@ -883,9 +942,13 @@ async function renderLibrary(filterText) {
   if (libraryEquipment) {
     results = results.filter((ex) => equipmentCategoryOf(ex) === libraryEquipment);
   }
-  // Ordre alphabétique par défaut (à la demande de Christine) - sauf pour
-  // le filtre "les plus utilisés" qui garde son propre tri par popularité.
-  results.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+  // Ordre alphabétique par défaut quand on ne tape rien (à la demande de
+  // Christine) ; trié par pertinence dès qu'une recherche est en cours (voir
+  // sortByRelevance - demande du 13/09/2026, "fentes" faisait remonter des
+  // exercices composés sans rapport avant les correspondances directes) -
+  // sauf pour le filtre "les plus utilisés" qui garde son propre tri par
+  // popularité.
+  sortByRelevance(results, q);
   if (libraryQuickFilter === "favorites") {
     results = results.filter((ex) => ex.favorite);
   } else if (libraryQuickFilter === "used") {
@@ -1274,9 +1337,10 @@ async function searchExercisesInModal(query) {
   if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
   if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
   if (modalFavoritesOnly) results = results.filter((ex) => ex.favorite);
-  // Ordre alphabétique par défaut (à la demande de Christine), comme dans
-  // la bibliothèque.
-  results.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+  // Ordre alphabétique par défaut quand on ne tape rien, trié par pertinence
+  // dès qu'une recherche est en cours - comme dans la bibliothèque (voir
+  // sortByRelevance).
+  sortByRelevance(results, rawQuery);
   // Pendant la saisie, on cache les rangées de filtres pour laisser toute la
   // place aux résultats - sur téléphone le clavier prend déjà la moitié de
   // l'écran, inutile de rogner encore plus l'espace visible.

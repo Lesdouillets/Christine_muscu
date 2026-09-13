@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v39";
+const CACHE_NAME = "carnet-muscu-v40";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -78,6 +78,15 @@ const CACHE_NAME = "carnet-muscu-v39";
 // actif (sinon tout ce qui correspond est affiché). 2) l'intitulé "Favoris"
 // au-dessus des boutons "Tout" / "★ Favoris" répétait le nom d'un des deux
 // boutons, jugé "bizarre" - renommé en "Filtrer")
+// (v40 : la recherche d'exercice (bibliothèque et modale gifs/filtres)
+// triait toujours par ordre alphabétique, y compris pendant une recherche
+// texte - remonté par Christine : chercher "fentes" faisait apparaître des
+// exercices composés (curl, extension triceps... combinés à une fente) au
+// même niveau que "lunge" ou "dumbbell lunge", noyés au milieu par l'ordre
+// alphabétique. Ajoute un tri par pertinence (voir searchRelevanceScore et
+// sortByRelevance dans js/app.js) qui privilégie une correspondance directe
+// et un nom court, appliqué uniquement pendant une recherche texte -
+// l'ordre alphabétique reste utilisé pour parcourir sans rien taper)
 const APP_SHELL = [
   "./",
   "./index.html",
