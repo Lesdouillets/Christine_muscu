@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v35";
+const CACHE_NAME = "carnet-muscu-v36";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -81,6 +81,11 @@ const CACHE_NAME = "carnet-muscu-v35";
 // Capture maintenant la VALEUR de "title"/"text" (et plus seulement leur
 // présence), pour comprendre ce qu'Android envoie réellement à la place
 // d'une photo)
+// (v36 : un partage tenté depuis l'appli Photos (donc plus du tout via
+// WhatsApp) a cette fois donné un formDataKeys VIDE - même pas de "title".
+// Capture la taille annoncée du corps (en-tête content-length) et, si le
+// formulaire ressort vide, relit le corps brut de la requête pour voir ce
+// qu'il contenait réellement)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
@@ -136,10 +141,30 @@ async function handleSharedPhoto(request) {
   // fichier a échoué (contrairement à localStorage, un service worker ne peut
   // écrire son diagnostic que dans le Cache API - consumeSharedPhotoFromCache
   // dans js/app.js la relit et la fusionne avec sa propre trace).
-  const debugInfo = { contentType: request.headers.get("content-type") || null };
+  const debugInfo = {
+    contentType: request.headers.get("content-type") || null,
+    // Diagnostic (v36, 13/09/2026) : un partage depuis l'appli Photos (donc
+    // sans passer par WhatsApp) a donné un formDataKeys VIDE - même pas de
+    // "title" cette fois. La taille annoncée du corps aide à savoir si
+    // Android a vraiment envoyé quelque chose ou un corps vide.
+    contentLength: request.headers.get("content-length") || null,
+  };
+  // Clone AVANT de lire le corps (request.formData() le consomme) - permet,
+  // si le formulaire ressort vide, de relire le corps brut juste après pour
+  // voir ce qu'il contenait réellement (tronqué par sécurité).
+  const rawClone = request.clone();
   try {
     const formData = await request.formData();
     debugInfo.formDataKeys = [...formData.keys()];
+    if (debugInfo.formDataKeys.length === 0) {
+      try {
+        const rawText = await rawClone.text();
+        debugInfo.rawBodyLength = rawText.length;
+        debugInfo.rawBodySample = rawText.slice(0, 500);
+      } catch (rawErr) {
+        debugInfo.rawBodyError = String((rawErr && rawErr.message) || rawErr);
+      }
+    }
     // Diagnostic (v35, 13/09/2026) : deux chemins de partage WhatsApp
     // différents (bulle du message vs photo plein écran) ont donné exactement
     // le même résultat - seul un champ "title" arrive, jamais de photo ni de
