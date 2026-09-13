@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v38";
+const CACHE_NAME = "carnet-muscu-v39";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -71,6 +71,13 @@ const CACHE_NAME = "carnet-muscu-v38";
 // l'exercice actuellement rattaché à la ligne s'affiche en simple texte, et
 // le bouton "choisir un exercice (gifs / filtres)" devient l'unique façon de
 // choisir ou changer l'exercice d'une ligne du brouillon d'import)
+// (v39 : corrige deux défauts remontés par Christine sur la modale de
+// recherche d'exercice (gifs/filtres) - 1) le plafond de 8 résultats
+// affichés masquait silencieusement des favoris dès qu'elle en avait plus
+// que ça ; ne s'applique plus que si aucun filtre ni recherche texte n'est
+// actif (sinon tout ce qui correspond est affiché). 2) l'intitulé "Favoris"
+// au-dessus des boutons "Tout" / "★ Favoris" répétait le nom d'un des deux
+// boutons, jugé "bizarre" - renommé en "Filtrer")
 const APP_SHELL = [
   "./",
   "./index.html",

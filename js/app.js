@@ -1287,7 +1287,17 @@ async function searchExercisesInModal(query) {
   const resultsEl = document.getElementById("exercise-search-results");
   resultsEl.innerHTML = "";
 
-  for (const r of results.slice(0, 8)) {
+  // Le nombre de résultats affichés était limité à 8 dans tous les cas, ce
+  // qui masquait silencieusement des favoris quand Christine en a plus que
+  // ça (remonté le 13/09/2026 : "il manque des favoris"). On ne garde ce
+  // plafond bas que pour le vrai cas "tout le catalogue, sans aucun filtre
+  // ni recherche" (1300+ exercices, mauvais pour les perfs sur téléphone) -
+  // dès qu'un filtre (favoris, catégorie, matériel) ou une recherche texte
+  // réduit la liste, on affiche tout ce qui correspond.
+  const noFilterAndNoQuery = !rawQuery && !modalFavoritesOnly && !modalCategory && !modalEquipment;
+  const displayLimit = noFilterAndNoQuery ? 8 : results.length;
+
+  for (const r of results.slice(0, displayLimit)) {
     const gifUrl = gifUrlOf(r);
     const div = document.createElement("div");
     div.className = "result-item result-item-withgif";
