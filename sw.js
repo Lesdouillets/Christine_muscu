@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v34";
+const CACHE_NAME = "carnet-muscu-v35";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -75,6 +75,12 @@ const CACHE_NAME = "carnet-muscu-v34";
 // présence/type/taille du champ "photo", ou l'erreur exacte si la lecture
 // a échoué - relue et affichée par consumeSharedPhotoFromCache/
 // renderAppVersionLabel dans js/app.js)
+// (v35 : le diagnostic v34 a montré, sur DEUX chemins de partage WhatsApp
+// différents (bulle du message, puis photo plein écran), exactement le même
+// résultat - seul un champ "title" arrive, jamais de champ "photo" ni "text".
+// Capture maintenant la VALEUR de "title"/"text" (et plus seulement leur
+// présence), pour comprendre ce qu'Android envoie réellement à la place
+// d'une photo)
 const SHARE_CACHE = "carnet-muscu-shared-photo";
 const APP_SHELL = [
   "./",
@@ -134,6 +140,18 @@ async function handleSharedPhoto(request) {
   try {
     const formData = await request.formData();
     debugInfo.formDataKeys = [...formData.keys()];
+    // Diagnostic (v35, 13/09/2026) : deux chemins de partage WhatsApp
+    // différents (bulle du message vs photo plein écran) ont donné exactement
+    // le même résultat - seul un champ "title" arrive, jamais de photo ni de
+    // texte. Pour comprendre ce qu'Android envoie réellement, on capture
+    // maintenant la VALEUR de ces champs texte (tronquée par sécurité), pas
+    // seulement leur présence.
+    for (const key of ["title", "text"]) {
+      const value = formData.get(key);
+      if (typeof value === "string") {
+        debugInfo[key + "Value"] = value.slice(0, 300);
+      }
+    }
     const file = formData.get("photo");
     debugInfo.hasPhotoField = !!file;
     if (file) {
