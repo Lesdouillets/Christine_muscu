@@ -139,6 +139,7 @@ button{font-family:inherit;}
 .ai-import-row-fields input[type="number"]{flex:1;min-width:0;}
 .ai-import-row select,.ai-import-row input{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:.85rem;color:var(--ink);font-family:inherit;}
 .ai-import-row-fields-wrap select{width:100%;}
+.ai-import-row-pick-btn{align-self:flex-start;padding:6px 10px;font-size:.72rem;}
 .ai-import-row-exclude-label{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);}
 .ai-import-row.excluded{opacity:.5;}
 .lib-item:hover{border-color:var(--accent);}
@@ -254,6 +255,13 @@ button{font-family:inherit;}
 
 .modal-backdrop{position:fixed;inset:0;background:rgba(24,37,48,.45);display:none;align-items:flex-end;justify-content:center;z-index:20;}
 .modal-backdrop.open{display:flex;}
+/* La modale de recherche d'exercice peut désormais s'ouvrir PAR-DESSUS la
+   modale d'import IA (choisir un exercice depuis une ligne du brouillon,
+   voir openAiImportExercisePicker dans js/app.js) - sans ce z-index plus
+   élevé, les deux modales étant à égalité (z-index:20) et #exercise-modal
+   venant avant #ai-import-modal dans le HTML, c'est l'import IA qui
+   restait au-dessus et interceptait les clics. */
+#exercise-modal{z-index:21;}
 .modal{background:var(--surface);border-radius:20px 20px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0));width:100%;max-width:480px;max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;}
 .modal h3{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.02em;margin:0;font-size:1.15rem;}
 .result-item{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;font-size:.86rem;}

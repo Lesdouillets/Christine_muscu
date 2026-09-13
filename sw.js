@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v36";
+const CACHE_NAME = "carnet-muscu-v37";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -36,12 +36,15 @@ const CACHE_NAME = "carnet-muscu-v36";
 // Ne s'applique plus qu'à la toute première utilisation. Corrige aussi un
 // cas limite dans la fusion de synchro - comparaison stricte "<" au lieu de
 // "<=" sur des horodatages identiques)
-// (v28 : implémente vraiment le partage de photo depuis WhatsApp (manifest.json
-// déclarait déjà "share_target" mais rien ne le gérait - une erreur 405 était
-// inévitable, GitHub Pages ne pouvant jamais répondre à un POST puisque c'est
-// un hébergement statique. Le service worker intercepte maintenant lui-même
-// cet envoi - avant qu'il n'atteigne le serveur -, garde la photo de côté, et
-// redirige vers l'appli qui ouvre directement l'import IA avec cette photo)
+// (v28 à v36 : tentative d'implémenter le partage de photo depuis WhatsApp
+// via le "share_target" du manifest.json, avec un diagnostic de plus en plus
+// détaillé côté service worker. Abandonné en v37 : le diagnostic a montré
+// qu'Android/Chrome ne transmet pas de façon fiable la photo réelle à
+// l'appli - WhatsApp n'envoie parfois qu'une description texte, et un
+// partage depuis l'appli Photos peut arriver avec un corps entièrement vide,
+// sans que le code de l'appli n'y puisse rien : le problème se situe avant
+// même que ce fichier ne reçoive quoi que ce soit. Christine utilise
+// désormais uniquement le bouton "Importer une photo de séance" du journal.)
 // (v29 : corrige les suppressions d'exercices de la bibliothèque (ex. les
 // doublons repérés via le diagnostic) qui revenaient toutes seules après une
 // synchro - mergeBackupData() ne supprimait jamais rien de lui-même, donc une
@@ -54,39 +57,14 @@ const CACHE_NAME = "carnet-muscu-v36";
 // ou une vieille sauvegarde cloud au lieu de le recalculer depuis les
 // vraies séances présentes ici. Cas réel : "Kettlebell alternating renegade
 // row" marqué utilisé alors qu'absent de Progrès et de toute séance)
-// (v31 : le partage de photo WhatsApp ouvrait bien l'appli mais jamais
-// l'import quand elle était déjà ouverte en arrière-plan - Android se
-// contentait de ramener cette fenêtre au premier plan sans lui faire
-// charger la redirection. sw.js prévient maintenant directement toute
-// fenêtre déjà ouverte par un message, en plus de la redirection)
 // (v32 : affiche la version installée directement dans la modale de
 // synchro - à la demande de Christine, pour vérifier facilement qu'une
 // mise à jour a bien été récupérée, sans passer par le bouton diagnostic)
-// (v33 : le partage WhatsApp restait silencieux même appli fermée - ajoute
-// une trace de diagnostic persistante (visible dans la modale de synchro)
-// pour savoir, sans câble USB, si la redirection/le message est seulement
-// reçu et si une photo est bien retrouvée dans le cache)
-// (v34 : le diagnostic v33 a montré que le signal de partage arrive bien
-// (redirection + message reçus) mais qu'aucune photo n'est jamais trouvée
-// dans le cache - la trace v33 ne pouvait pas dire pourquoi, puisque tout
-// se passe dans handleSharedPhoto() ci-dessous, côté service worker, sans
-// accès à localStorage. Ajoute une trace technique détaillée (Cache API,
-// clé "debug") : type de contenu reçu, noms des champs du formulaire,
-// présence/type/taille du champ "photo", ou l'erreur exacte si la lecture
-// a échoué - relue et affichée par consumeSharedPhotoFromCache/
-// renderAppVersionLabel dans js/app.js)
-// (v35 : le diagnostic v34 a montré, sur DEUX chemins de partage WhatsApp
-// différents (bulle du message, puis photo plein écran), exactement le même
-// résultat - seul un champ "title" arrive, jamais de champ "photo" ni "text".
-// Capture maintenant la VALEUR de "title"/"text" (et plus seulement leur
-// présence), pour comprendre ce qu'Android envoie réellement à la place
-// d'une photo)
-// (v36 : un partage tenté depuis l'appli Photos (donc plus du tout via
-// WhatsApp) a cette fois donné un formDataKeys VIDE - même pas de "title".
-// Capture la taille annoncée du corps (en-tête content-length) et, si le
-// formulaire ressort vide, relit le corps brut de la requête pour voir ce
-// qu'il contenait réellement)
-const SHARE_CACHE = "carnet-muscu-shared-photo";
+// (v37 : retire tout le code de partage de photo (share_target, cache de
+// partage, diagnostic dédié) - abandonné, voir ci-dessus. Ajoute une
+// estimation du temps restant pendant l'analyse IA d'une photo (js/ai.js,
+// js/app.js) et l'accès aux gifs/filtres de la bibliothèque lors du choix
+// d'un exercice dans le brouillon d'import (js/app.js))
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -111,122 +89,16 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(
-        // SHARE_CACHE n'est pas un cache de version de l'appli (voir
-        // CACHE_NAME plus haut) mais une "boîte aux lettres" temporaire pour
-        // une photo tout juste partagée depuis une autre appli - il ne faut
-        // surtout pas le supprimer ici comme les vieux caches d'appli.
-        keys.filter((k) => k !== CACHE_NAME && k !== SHARE_CACHE).map((k) => caches.delete(k))
-      )
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// Reçoit une photo partagée depuis une autre appli (WhatsApp, galerie...) via
-// le "share_target" déclaré dans manifest.json. Android envoie un vrai POST
-// (multipart/form-data) vers ce fichier - mais GitHub Pages est un hébergement
-// statique qui ne sait répondre qu'à des GET, donc ce POST échouerait toujours
-// avec une erreur 405 s'il l'atteignait. On l'intercepte ici, avant qu'il ne
-// quitte l'appareil : on garde la photo de côté (Cache API, seul stockage
-// simple accessible depuis un service worker) puis on redirige vers l'appli
-// normale, qui la récupère et ouvre directement l'import IA avec (voir
-// checkForSharedPhoto dans js/app.js).
-async function handleSharedPhoto(request) {
-  let stored = false;
-  // Diagnostic (v34, 13/09/2026) : le catch ci-dessous avalait silencieusement
-  // toute erreur - Christine a confirmé que le signal de partage arrive bien
-  // (redirection + message reçus), mais qu'aucune photo n'est jamais trouvée
-  // dans le cache. Cette trace, elle, dit précisément POURQUOI la lecture du
-  // fichier a échoué (contrairement à localStorage, un service worker ne peut
-  // écrire son diagnostic que dans le Cache API - consumeSharedPhotoFromCache
-  // dans js/app.js la relit et la fusionne avec sa propre trace).
-  const debugInfo = {
-    contentType: request.headers.get("content-type") || null,
-    // Diagnostic (v36, 13/09/2026) : un partage depuis l'appli Photos (donc
-    // sans passer par WhatsApp) a donné un formDataKeys VIDE - même pas de
-    // "title" cette fois. La taille annoncée du corps aide à savoir si
-    // Android a vraiment envoyé quelque chose ou un corps vide.
-    contentLength: request.headers.get("content-length") || null,
-  };
-  // Clone AVANT de lire le corps (request.formData() le consomme) - permet,
-  // si le formulaire ressort vide, de relire le corps brut juste après pour
-  // voir ce qu'il contenait réellement (tronqué par sécurité).
-  const rawClone = request.clone();
-  try {
-    const formData = await request.formData();
-    debugInfo.formDataKeys = [...formData.keys()];
-    if (debugInfo.formDataKeys.length === 0) {
-      try {
-        const rawText = await rawClone.text();
-        debugInfo.rawBodyLength = rawText.length;
-        debugInfo.rawBodySample = rawText.slice(0, 500);
-      } catch (rawErr) {
-        debugInfo.rawBodyError = String((rawErr && rawErr.message) || rawErr);
-      }
-    }
-    // Diagnostic (v35, 13/09/2026) : deux chemins de partage WhatsApp
-    // différents (bulle du message vs photo plein écran) ont donné exactement
-    // le même résultat - seul un champ "title" arrive, jamais de photo ni de
-    // texte. Pour comprendre ce qu'Android envoie réellement, on capture
-    // maintenant la VALEUR de ces champs texte (tronquée par sécurité), pas
-    // seulement leur présence.
-    for (const key of ["title", "text"]) {
-      const value = formData.get(key);
-      if (typeof value === "string") {
-        debugInfo[key + "Value"] = value.slice(0, 300);
-      }
-    }
-    const file = formData.get("photo");
-    debugInfo.hasPhotoField = !!file;
-    if (file) {
-      debugInfo.photoIsFile = typeof file.arrayBuffer === "function";
-      debugInfo.photoType = file.type;
-      debugInfo.photoSize = file.size;
-    }
-    if (file && typeof file.arrayBuffer === "function") {
-      const cache = await caches.open(SHARE_CACHE);
-      await cache.put(
-        "photo",
-        new Response(file, { headers: { "Content-Type": file.type || "application/octet-stream" } })
-      );
-      stored = true;
-    }
-  } catch (err) {
-    // Partage sans photo exploitable (ex. juste du texte) - on redirige quand
-    // même vers l'appli plutôt que de laisser une erreur s'afficher.
-    debugInfo.error = String((err && err.message) || err);
-  }
-  try {
-    const cache = await caches.open(SHARE_CACHE);
-    await cache.put("debug", new Response(JSON.stringify(debugInfo), { headers: { "Content-Type": "application/json" } }));
-  } catch (err) {
-    // pas grave, purement informatif
-  }
-  // Si une fenêtre de l'appli est déjà ouverte (en arrière-plan par exemple),
-  // Android/Chrome se contente souvent de la ramener au premier plan SANS
-  // jamais lui faire charger la redirection ci-dessous - constaté avec
-  // Christine le 14/09/2026 (l'appli s'ouvrait, mais jamais l'import). On la
-  // prévient donc directement par message, en plus de la redirection
-  // (nécessaire, elle, quand aucune fenêtre n'était déjà ouverte).
-  if (stored) {
-    const allClients = await self.clients.matchAll({ type: "window" });
-    for (const client of allClients) {
-      client.postMessage({ type: "carnet-muscu-shared-photo" });
-    }
-  }
-  return Response.redirect(new URL("index.html?photo-partagee=1", self.location.href).href, 303);
-}
-
 // Stratégie "réseau d'abord, cache en secours" : avec une connexion, on
 // prend toujours la dernière version en ligne (et on rafraîchit le cache
 // au passage) ; sans connexion, on retombe sur la dernière copie connue.
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
-  if (event.request.method === "POST" && url.pathname.endsWith("/import.html")) {
-    event.respondWith(handleSharedPhoto(event.request));
-    return;
-  }
   if (event.request.method !== "GET") return;
   // "reload" force le navigateur à revalider avec le serveur au lieu de
   // servir une copie de son propre cache HTTP (GitHub Pages envoie des

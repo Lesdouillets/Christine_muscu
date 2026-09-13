@@ -354,7 +354,7 @@
 <div class="modal-backdrop" id="sync-modal">
   <div class="modal">
     <h3>Synchronisation entre appareils</h3>
-    <p class="sync-hint" id="app-version-label" style="opacity:0.6; white-space:pre-line;"></p>
+    <p class="sync-hint" id="app-version-label" style="opacity:0.6;"></p>
     <div id="sync-setup">
       <p class="sync-hint">Pas encore configurée sur cet appareil.</p>
       <button class="ghost-btn" id="sync-create-code-btn">Créer un code de synchronisation</button>
@@ -392,6 +392,7 @@
     <h3>Import depuis une photo</h3>
     <div id="ai-import-loading">
       <p class="sync-hint">Lecture de la photo en cours…</p>
+      <p class="sync-hint" id="ai-import-loading-eta" style="opacity:0.6;"></p>
     </div>
     <div id="ai-import-error" hidden>
       <p class="sync-hint" id="ai-import-error-text"></p>

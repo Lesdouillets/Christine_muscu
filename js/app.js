@@ -1145,6 +1145,12 @@ let pendingExistingLibEx = null;
 // depuis une carte de la séance) - null quand la modale sert a ajouter un
 // nouvel exercice à la séance (comportement normal).
 let swapTargetExerciseSessionId = null;
+// Index de la ligne du brouillon d'import IA en cours de rattachement à un
+// exercice (mode "choisir dans la bibliothèque" ouvert depuis une ligne du
+// brouillon, voir renderAiImportReview) - null le reste du temps. On réutilise
+// cette même modale de recherche (gifs + filtres) plutôt que le menu déroulant
+// à choix limité, à la demande de Christine du 13/09/2026.
+let aiImportPickRowIndex = null;
 
 function buildModalChips() {
   buildChipRowCustom(
@@ -1193,6 +1199,7 @@ function openExerciseModal() {
   newExerciseName = "";
   pendingExistingLibEx = null;
   swapTargetExerciseSessionId = null;
+  aiImportPickRowIndex = null;
   document.getElementById("exercise-modal-title").textContent = "Ajouter un exercice";
   document.getElementById("confirm-add-exercise-verb").textContent = "Ajouter";
   modalCategory = null;
@@ -1219,6 +1226,7 @@ function openExerciseModal() {
 function closeExerciseModal() {
   document.getElementById("exercise-modal").classList.remove("open");
   swapTargetExerciseSessionId = null;
+  aiImportPickRowIndex = null;
 }
 
 // Ouvre la meme modale de recherche/creation d'exercice, mais en mode
@@ -1229,6 +1237,32 @@ function openExerciseSwapModal(ex) {
   openExerciseModal();
   swapTargetExerciseSessionId = ex.id;
   document.getElementById("exercise-modal-title").textContent = "Changer d'exercice";
+}
+
+// Ouvre la même modale de recherche (gifs + filtres) pour rattacher une
+// ligne du brouillon d'import IA à un exercice de la bibliothèque - demande
+// de Christine du 13/09/2026 : le menu déroulant à 5 suggestions ne
+// permettait pas de voir les gifs ni de filtrer par catégorie/matériel.
+function openAiImportExercisePicker(rowIndex) {
+  openExerciseModal();
+  aiImportPickRowIndex = rowIndex;
+  document.getElementById("exercise-modal-title").textContent = "Choisir un exercice";
+  document.getElementById("confirm-add-exercise-verb").textContent = "Choisir";
+}
+
+// Rattache l'exercice choisi (existant ou tout juste créé) à la ligne du
+// brouillon d'import IA en cours, puis referme la modale et rafraîchit
+// l'aperçu (gif + menu déroulant de cette ligne).
+function selectAiImportRowExercise(libEx) {
+  if (aiImportPickRowIndex === null) return;
+  const row = aiImportDraft.rows[aiImportPickRowIndex];
+  if (!row.candidates.some((c) => c.id === libEx.id)) {
+    row.candidates = [libEx, ...row.candidates];
+  }
+  row.selectedId = libEx.id;
+  aiImportPickRowIndex = null;
+  closeExerciseModal();
+  renderAiImportReview();
 }
 
 async function searchExercisesInModal(query) {
@@ -1258,7 +1292,10 @@ async function searchExercisesInModal(query) {
     const div = document.createElement("div");
     div.className = "result-item result-item-withgif";
     div.innerHTML = `${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}<span>${escapeHtml(r.name)} (${typeLabel(r.type)})</span>`;
-    div.addEventListener("click", () => openReprsStepForExisting(r));
+    // En mode "choisir pour l'import IA", un clic rattache directement -
+    // pas besoin de repasser par l'étape "répétitions" (déjà réglable sur
+    // la ligne elle-même).
+    div.addEventListener("click", () => (aiImportPickRowIndex !== null ? selectAiImportRowExercise(r) : openReprsStepForExisting(r)));
     resultsEl.appendChild(div);
   }
 
@@ -1277,7 +1314,7 @@ function openNewExerciseForm(name) {
   newExerciseName = name;
   newExerciseReps = 10;
   document.getElementById("new-exercise-name-display").textContent = name;
-  document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
+  document.getElementById("confirm-add-exercise-verb").textContent = aiImportPickRowIndex !== null ? "Choisir" : swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = false;
   // Remise à zéro du choix de gif à chaque nouvel exercice créé depuis la séance.
@@ -1300,7 +1337,7 @@ function openReprsStepForExisting(libEx) {
   newExerciseName = libEx.name;
   newExerciseReps = 10;
   document.getElementById("new-exercise-name-display").textContent = libEx.name;
-  document.getElementById("confirm-add-exercise-verb").textContent = swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
+  document.getElementById("confirm-add-exercise-verb").textContent = aiImportPickRowIndex !== null ? "Choisir" : swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = true;
   document.getElementById("new-exercise-gif-kind-field").hidden = true;
@@ -1360,6 +1397,10 @@ async function confirmAddExerciseFromModal() {
   // au moins la prévenir au lieu de rester bloquée sans explication.
   try {
     if (pendingExistingLibEx) {
+      if (aiImportPickRowIndex !== null) {
+        selectAiImportRowExercise(pendingExistingLibEx);
+        return;
+      }
       if (swapTargetExerciseSessionId) {
         await swapExerciseInSession(swapTargetExerciseSessionId, pendingExistingLibEx, newExerciseReps);
         return;
@@ -1382,6 +1423,10 @@ async function confirmAddExerciseFromModal() {
     // suivante et donnait l'impression de ne pas avoir été enregistré -
     // bug remonté par Christine.
     const libEx = await Db.addLibraryExercise({ name: newExerciseName, type, gif, favorite: true });
+    if (aiImportPickRowIndex !== null) {
+      selectAiImportRowExercise(libEx);
+      return;
+    }
     if (swapTargetExerciseSessionId) {
       await swapExerciseInSession(swapTargetExerciseSessionId, libEx, newExerciseReps);
       return;
@@ -1912,10 +1957,45 @@ function setAiImportModalState(state) {
   document.getElementById("ai-import-review-actions").hidden = state !== "review";
 }
 
+// Temps restant affiché pendant l'analyse (demande de Christine du
+// 13/09/2026 : "c'est un peu long l'analyse d'une photo"). AI_IMPORT_
+// ESTIMATED_SECONDS est une ESTIMATION approximative (pas une mesure réelle
+// du temps de réponse de la fonction Firebase) - une fois ce délai écoulé
+// sans réponse, on ne fait plus semblant de savoir combien de temps il
+// reste et on affiche juste que ça continue.
+const AI_IMPORT_ESTIMATED_SECONDS = 15;
+let aiImportEtaTimer = null;
+
+function startAiImportEtaCountdown() {
+  const el = document.getElementById("ai-import-loading-eta");
+  if (!el) return;
+  let remaining = AI_IMPORT_ESTIMATED_SECONDS;
+  const render = () => {
+    el.textContent = remaining > 0
+      ? `Temps restant estimé : environ ${remaining}s`
+      : "Ça prend un peu plus longtemps que prévu, encore un instant…";
+  };
+  render();
+  aiImportEtaTimer = setInterval(() => {
+    remaining -= 1;
+    render();
+  }, 1000);
+}
+
+function stopAiImportEtaCountdown() {
+  if (aiImportEtaTimer) {
+    clearInterval(aiImportEtaTimer);
+    aiImportEtaTimer = null;
+  }
+  const el = document.getElementById("ai-import-loading-eta");
+  if (el) el.textContent = "";
+}
+
 async function openAiImportFlow(file) {
   aiImportDraft = null;
   setAiImportModalState("loading");
   document.getElementById("ai-import-modal").classList.add("open");
+  startAiImportEtaCountdown();
   try {
     const [result, library] = await Promise.all([analyzeSessionPhoto(file), Db.getAllLibraryExercises()]);
     if (result.exercises.length === 0) {
@@ -1946,6 +2026,8 @@ async function openAiImportFlow(file) {
   } catch (err) {
     document.getElementById("ai-import-error-text").textContent = err.message || "Échec de la lecture de la photo.";
     setAiImportModalState("error");
+  } finally {
+    stopAiImportEtaCountdown();
   }
 }
 
@@ -1981,6 +2063,7 @@ function renderAiImportReview() {
                 <option value="">— choisir un exercice de la bibliothèque —</option>
                 ${options}
               </select>
+              <button type="button" class="ghost-btn ai-import-row-pick-btn" data-index="${i}">🔍 voir les gifs / filtrer</button>
               <div class="ai-import-row-fields">
                 <input type="number" class="ai-import-row-reps" data-index="${i}" min="1" value="${row.reps}">
                 <input type="text" class="ai-import-row-note" data-index="${i}" placeholder="note (optionnel)" value="${escapeHtml(row.note)}">
@@ -2001,6 +2084,9 @@ function renderAiImportReview() {
       const gifDiv = container.querySelector(`.ai-import-row-gif[data-index="${idx}"]`);
       if (gifDiv) gifDiv.innerHTML = aiImportRowGifHtml(aiImportDraft.rows[idx]);
     })
+  );
+  container.querySelectorAll(".ai-import-row-pick-btn").forEach((el) =>
+    el.addEventListener("click", () => openAiImportExercisePicker(Number(el.dataset.index)))
   );
   container.querySelectorAll(".ai-import-row-reps").forEach((el) =>
     el.addEventListener("input", (e) => {
@@ -2089,33 +2175,7 @@ async function renderAppVersionLabel() {
   try {
     const keys = await caches.keys();
     const appCache = keys.find((k) => /^carnet-muscu-v\d+$/.test(k));
-    let text = appCache ? `Version installée : ${appCache.replace("carnet-muscu-", "")}` : "";
-    // Trace du dernier partage reçu (voir recordShareDebug/consumeSharedPhotoFromCache
-    // ci-dessous) - pour diagnostiquer un partage WhatsApp silencieux sans
-    // avoir besoin d'un câble USB ou de la console du téléphone.
-    try {
-      const raw = localStorage.getItem("carnet-muscu-share-debug");
-      if (raw) {
-        const d = JSON.parse(raw);
-        const when = new Date(d.at).toLocaleString("fr-FR");
-        let detail;
-        if (d.error) detail = `erreur (${d.error})`;
-        else if (d.markerPresent === false) detail = "aucun partage détecté depuis la dernière ouverture";
-        else if (d.cacheHit === true) detail = `photo reçue et ouverte (${d.blobSize} octets, ${d.blobType || "?"})`;
-        else if (d.cacheHit === false) detail = "signal de partage reçu, mais aucune photo trouvée dans le cache";
-        else detail = "partage détecté";
-        text += `\nDernier partage (${d.source === "message" ? "appli déjà ouverte" : "nouvelle ouverture"}, ${when}) : ${detail}`;
-        // Détail côté service worker (voir handleSharedPhoto dans sw.js) -
-        // dit précisément ce qu'Android a envoyé et pourquoi la lecture a
-        // échoué, quand elle a échoué.
-        if (d.swDebug) {
-          text += `\nDétail technique : ${JSON.stringify(d.swDebug)}`;
-        }
-      }
-    } catch (err) {
-      // pas grave, purement informatif
-    }
-    el.textContent = text;
+    el.textContent = appCache ? `Version installée : ${appCache.replace("carnet-muscu-", "")}` : "";
   } catch (err) {
     el.textContent = "";
   }
@@ -2297,107 +2357,6 @@ async function migrateUsageCountsFromRealData() {
     console.error("[carnet-muscu] échec de la migration des compteurs d'utilisation :", err);
   }
   localStorage.setItem(FLAG, "1");
-}
-
-// Récupère une photo partagée depuis une autre appli (WhatsApp, galerie...) -
-// voir le "share_target" dans manifest.json et handleSharedPhoto dans sw.js,
-// qui a intercepté l'envoi avant qu'il n'atteigne le serveur (impossible sur
-// un hébergement statique comme GitHub Pages) et a mis la photo de côté dans
-// un cache. On ouvre alors directement l'import IA avec cette photo, comme
-// si Christine avait choisi le fichier elle-même.
-//
-// Deux façons d'arriver ici, TOUTES LES DEUX nécessaires (constaté avec
-// Christine le 14/09/2026 : le partage ouvrait bien l'appli, mais jamais
-// l'import) :
-// 1) L'appli n'était pas ouverte (ou Android en lance une nouvelle instance) :
-//    une vraie navigation se fait vers index.html?photo-partagee=1 (le
-//    redirect fait par handleSharedPhoto), et checkForSharedPhoto() ci-dessous
-//    la détecte au chargement de la page.
-// 2) L'appli était DÉJÀ ouverte en arrière-plan : Android/Chrome se contente
-//    alors souvent de ramener cette fenêtre déjà existante au premier plan
-//    SANS jamais lui faire charger cette URL - la méthode 1) ne se déclenche
-//    donc jamais. sw.js prévient dans ce cas directement la page ouverte par
-//    un message (postMessage), écouté plus bas sur navigator.serviceWorker.
-// Trace de diagnostic persistante (à la demande implicite du 14/09/2026 :
-// partage encore silencieux malgré les correctifs v29-v32, sans moyen de
-// voir ce qui se passe réellement sur le téléphone). Enregistrée dans
-// localStorage à CHAQUE tentative (succès ou échec), et affichée dans la
-// modale de synchro (voir renderAppVersionLabel) - permet de savoir, sans
-// console ni câble USB, si la redirection/le message a seulement été REÇU
-// (indépendamment de la présence d'une vraie photo dans le cache).
-function recordShareDebug(fields) {
-  try {
-    localStorage.setItem(
-      "carnet-muscu-share-debug",
-      JSON.stringify({ at: new Date().toISOString(), ...fields })
-    );
-  } catch (err) {
-    // pas grave, purement informatif
-  }
-}
-
-// Récupère la trace détaillée déposée côté service worker (voir sw.js,
-// handleSharedPhoto) - c'est la seule façon pour lui de faire remonter un
-// diagnostic (il n'a pas accès à localStorage), et c'est ce qui dit
-// précisément pourquoi une photo n'a pas pu être lue (champ absent, format
-// inattendu, erreur de lecture...) plutôt que juste "rien trouvé".
-async function readSwShareDebug(cache) {
-  try {
-    const resp = await cache.match("debug");
-    if (!resp) return null;
-    await cache.delete("debug");
-    return await resp.json();
-  } catch (err) {
-    return null;
-  }
-}
-
-async function consumeSharedPhotoFromCache(source) {
-  if (!("caches" in window)) {
-    recordShareDebug({ source, cachesApi: false });
-    return;
-  }
-  try {
-    const cache = await caches.open("carnet-muscu-shared-photo");
-    const swDebug = await readSwShareDebug(cache);
-    const response = await cache.match("photo");
-    if (!response) {
-      recordShareDebug({ source, cachesApi: true, cacheHit: false, swDebug });
-      return;
-    }
-    await cache.delete("photo");
-    const blob = await response.blob();
-    const file = new File([blob], "photo-partagee.jpg", { type: blob.type || "image/jpeg" });
-    recordShareDebug({ source, cachesApi: true, cacheHit: true, blobSize: blob.size, blobType: blob.type, swDebug });
-    await openAiImportFlow(file);
-  } catch (err) {
-    console.error("[carnet-muscu] échec de la récupération de la photo partagée :", err);
-    recordShareDebug({ source, error: String(err && err.message ? err.message : err) });
-  }
-}
-
-async function checkForSharedPhoto() {
-  // Enregistré à CHAQUE démarrage de l'appli, marqueur présent ou non - la
-  // question à trancher est justement de savoir si ce marqueur (posé par la
-  // redirection de handleSharedPhoto dans sw.js) arrive jusqu'ici après un
-  // partage, ou s'il se perd avant.
-  recordShareDebug({ source: "url", markerPresent: location.search.includes("photo-partagee=1"), fullSearch: location.search });
-  if (!location.search.includes("photo-partagee=1")) return;
-  // Nettoie l'URL tout de suite, avant même de savoir si une photo est
-  // effectivement présente, pour ne jamais redéclencher ça au prochain
-  // rechargement de la page (ex. après avoir remis l'appli au premier plan).
-  window.history.replaceState({}, "", location.pathname);
-  await consumeSharedPhotoFromCache("url");
-}
-
-// Cas 2) ci-dessus : l'appli était déjà ouverte, sw.js le signale directement
-// via un message plutôt que par une navigation (voir handleSharedPhoto).
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "carnet-muscu-shared-photo") {
-      consumeSharedPhotoFromCache("message");
-    }
-  });
 }
 
 async function init() {
@@ -2644,7 +2603,6 @@ async function init() {
 
   await renderJournal();
   goTo("journal");
-  await checkForSharedPhoto();
 }
 
 document.addEventListener("DOMContentLoaded", init);
