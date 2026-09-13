@@ -138,7 +138,12 @@ button{font-family:inherit;}
 .ai-import-row-fields select{flex:2;}
 .ai-import-row-fields input[type="number"]{flex:1;min-width:0;}
 .ai-import-row select,.ai-import-row input{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:.85rem;color:var(--ink);font-family:inherit;}
-.ai-import-row-fields-wrap select{width:100%;}
+/* Nom de l'exercice actuellement rattaché à la ligne du brouillon (remplace
+   l'ancien menu déroulant à choix limité - demande de Christine du
+   13/09/2026, le menu ne montrait ni gif ni filtres). */
+.ai-import-row-selected-name{font-size:.85rem;font-weight:600;color:var(--ink);text-transform:capitalize;}
+.ai-import-row-selected-name .ai-import-row-selected-type{font-weight:400;color:var(--muted);text-transform:none;}
+.ai-import-row-noselect{font-weight:400;font-style:italic;color:var(--muted);}
 .ai-import-row-pick-btn{align-self:flex-start;padding:6px 10px;font-size:.72rem;}
 .ai-import-row-exclude-label{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--muted);}
 .ai-import-row.excluded{opacity:.5;}

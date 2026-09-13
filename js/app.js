@@ -2043,6 +2043,13 @@ function aiImportRowGifHtml(row) {
     : `<div class="ai-import-row-noGif">pas de démonstration</div>`;
 }
 
+function aiImportRowSelectedNameHtml(row) {
+  const selected = row.candidates.find((c) => c.id === row.selectedId);
+  return selected
+    ? `${escapeHtml(selected.name)} <span class="ai-import-row-selected-type">(${escapeHtml(typeLabel(selected.type))})</span>`
+    : `<span class="ai-import-row-noselect">aucun exercice choisi</span>`;
+}
+
 function renderAiImportReview() {
   document.getElementById("ai-import-title-input").value = aiImportDraft.title;
   document.getElementById("ai-import-date-input").value = aiImportDraft.date;
@@ -2050,20 +2057,14 @@ function renderAiImportReview() {
   const container = document.getElementById("ai-import-rows");
   container.innerHTML = aiImportDraft.rows
     .map((row, i) => {
-      const options = row.candidates
-        .map((c) => `<option value="${escapeHtml(c.id)}" ${row.selectedId === c.id ? "selected" : ""}>${escapeHtml(c.name)} (${escapeHtml(typeLabel(c.type))})</option>`)
-        .join("");
       return `
         <div class="ai-import-row${row.excluded ? " excluded" : ""}" data-index="${i}">
           <div class="ai-import-row-raw">Lu sur la photo : <b>${escapeHtml(row.rawName)}</b>${row.note ? ` — ${escapeHtml(row.note)}` : ""}</div>
           <div class="ai-import-row-main">
             <div class="ai-import-row-gif" data-index="${i}">${aiImportRowGifHtml(row)}</div>
             <div class="ai-import-row-fields-wrap">
-              <select class="ai-import-row-select" data-index="${i}">
-                <option value="">— choisir un exercice de la bibliothèque —</option>
-                ${options}
-              </select>
-              <button type="button" class="ghost-btn ai-import-row-pick-btn" data-index="${i}">🔍 voir les gifs / filtrer</button>
+              <div class="ai-import-row-selected-name" data-index="${i}">${aiImportRowSelectedNameHtml(row)}</div>
+              <button type="button" class="ghost-btn ai-import-row-pick-btn" data-index="${i}">🔍 choisir un exercice (gifs / filtres)</button>
               <div class="ai-import-row-fields">
                 <input type="number" class="ai-import-row-reps" data-index="${i}" min="1" value="${row.reps}">
                 <input type="text" class="ai-import-row-note" data-index="${i}" placeholder="note (optionnel)" value="${escapeHtml(row.note)}">
@@ -2077,14 +2078,6 @@ function renderAiImportReview() {
         </div>`;
     })
     .join("");
-  container.querySelectorAll(".ai-import-row-select").forEach((el) =>
-    el.addEventListener("change", (e) => {
-      const idx = Number(e.target.dataset.index);
-      aiImportDraft.rows[idx].selectedId = e.target.value;
-      const gifDiv = container.querySelector(`.ai-import-row-gif[data-index="${idx}"]`);
-      if (gifDiv) gifDiv.innerHTML = aiImportRowGifHtml(aiImportDraft.rows[idx]);
-    })
-  );
   container.querySelectorAll(".ai-import-row-pick-btn").forEach((el) =>
     el.addEventListener("click", () => openAiImportExercisePicker(Number(el.dataset.index)))
   );

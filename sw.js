@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v37";
+const CACHE_NAME = "carnet-muscu-v38";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -65,6 +65,12 @@ const CACHE_NAME = "carnet-muscu-v37";
 // estimation du temps restant pendant l'analyse IA d'une photo (js/ai.js,
 // js/app.js) et l'accès aux gifs/filtres de la bibliothèque lors du choix
 // d'un exercice dans le brouillon d'import (js/app.js))
+// (v38 : la v37 avait gardé, en plus du nouveau bouton gifs/filtres, l'ancien
+// menu déroulant à choix limité (noms bruts en anglais, sans gif) - toujours
+// visible et source de confusion. Le retire complètement : le nom de
+// l'exercice actuellement rattaché à la ligne s'affiche en simple texte, et
+// le bouton "choisir un exercice (gifs / filtres)" devient l'unique façon de
+// choisir ou changer l'exercice d'une ligne du brouillon d'import)
 const APP_SHELL = [
   "./",
   "./index.html",
