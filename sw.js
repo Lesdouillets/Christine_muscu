@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v43";
+const CACHE_NAME = "carnet-muscu-v44";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -104,6 +104,12 @@ const CACHE_NAME = "carnet-muscu-v43";
 // corps ou à l'élastique (planche, montée de corde…) ne doivent jamais
 // apparaître dans progrès, même s'ils ont des répétitions enregistrées :
 // cet onglet ne concerne que le suivi de charge)
+// (v44 : le geste de retour du téléphone (balayer du bord gauche vers la
+// droite en PWA installée sur Android) fermait l'appli faute d'historique
+// de navigation interne - demande de Christine du 14/09/2026, depuis
+// n'importe quel écran. goTo() empile maintenant une entrée d'historique à
+// chaque changement d'écran, et un écouteur "popstate" intercepte ce
+// retour pour rouvrir le journal plutôt que de laisser le geste continuer)
 const APP_SHELL = [
   "./",
   "./index.html",

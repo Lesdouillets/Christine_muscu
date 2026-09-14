@@ -13,11 +13,21 @@ function formatDateFr(iso) {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Empile une entrée d'historique à chaque changement d'écran, pour que le
+// geste de retour du téléphone (balayer du bord gauche vers la droite, sur
+// Android en PWA installée) revienne au menu principal au lieu de fermer
+// l'appli - à la demande de Christine du 14/09/2026 : "quand je glisse
+// l'appli de la gauche vers la droite, ça ne doit pas la fermer mais
+// revenir au menu principal", et depuis n'importe quel écran. Sans historique
+// à "dépiler", ce geste ferme directement l'appli faute de mieux : voir
+// l'écouteur "popstate" plus bas, qui intercepte ce retour et rouvre le
+// journal plutôt que de laisser le geste continuer.
 function goTo(viewName) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.getElementById("view-" + viewName).classList.add("active");
   document.querySelectorAll(".navitem").forEach((n) => n.classList.remove("sel"));
   document.querySelectorAll(`.navitem[data-nav="${viewName}"]`).forEach((n) => n.classList.add("sel"));
+  history.pushState({ view: viewName }, "", location.pathname);
 }
 
 // ---------- Import de la bibliothèque publique (phase 2) ----------
@@ -2458,6 +2468,18 @@ async function migrateUsageCountsFromRealData() {
   }
   localStorage.setItem(FLAG, "1");
 }
+
+// Le geste de retour (balayage, ou bouton retour Android) déclenche un
+// "popstate" - on ignore quel écran était visé (l'historique interne, voir
+// goTo, n'a pas besoin d'être un vrai fil d'écrans précédents) et on
+// rouvre toujours le journal, à la demande de Christine du 14/09/2026.
+// goTo() repousse aussitôt une nouvelle entrée d'historique, pour qu'un
+// balayage suivant refasse la même chose plutôt que de finir par vraiment
+// fermer l'appli une fois l'historique "épuisé".
+window.addEventListener("popstate", async () => {
+  await renderJournal();
+  goTo("journal");
+});
 
 async function init() {
   await Db.init();
