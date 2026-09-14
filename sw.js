@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v41";
+const CACHE_NAME = "carnet-muscu-v42";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -93,6 +93,13 @@ const CACHE_NAME = "carnet-muscu-v41";
 // noms d'exercice (jeu de données en anglais, tout minuscules) affichent
 // maintenant une majuscule sur la première lettre seulement (voir
 // capitalizeFirst dans js/app.js))
+// (v42 : onglet progrès, suite aux précisions de Christine du 14/09/2026 -
+// 1) quand plusieurs tours d'une séance ont des poids différents, la valeur
+// du graphique était le tour le plus lourd ; c'est maintenant le poids du
+// DERNIER tour renseigné qui est utilisé. 2) un exercice ajouté à une
+// séance sans jamais avoir indiqué de poids (ni de répétitions pour un
+// exercice au poids du corps) n'apparaît plus dans la liste progrès - il
+// n'y a rien à y montrer)
 const APP_SHELL = [
   "./",
   "./index.html",

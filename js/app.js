@@ -1532,17 +1532,30 @@ async function renderProgressList(filterText) {
   listEl.innerHTML = "";
   const allEx = await Db.getAllExerciseSessions();
   const counts = new Map(); // libraryExerciseId -> nombre de séances
+  // Un exercice ajouté à une séance sans jamais avoir indiqué de poids (ni
+  // de répétitions pour un exercice au poids du corps) n'a rien à montrer
+  // dans le graphique de progression - inutile de l'afficher dans la liste
+  // (remonté par Christine du 14/09/2026 : "il y a des exercices qui ont
+  // déjà été fait mais je n'avais pas indiqué le poids donc ça ne sert à
+  // rien de les voir dans progrès").
+  const hasDataByLib = new Set();
   for (const ex of allEx) {
     if (!ex.libraryExerciseId) continue;
     counts.set(ex.libraryExerciseId, (counts.get(ex.libraryExerciseId) || 0) + 1);
+    const exHasData = isWeightlessType(ex.type)
+      ? ex.targetReps != null
+      : (ex.rounds || []).some((r) => r.weight);
+    if (exHasData) hasDataByLib.add(ex.libraryExerciseId);
   }
   // Nom actuel (pas celui enregistré au moment de l'ajout, qui peut être
   // périmé depuis un renommage dans la bibliothèque).
   const withNames = await Promise.all(
-    [...counts.entries()].map(async ([libId, count]) => {
-      const libEx = await Db.getLibraryExercise(libId);
-      return libEx ? { libId, count, name: libEx.name } : null;
-    })
+    [...counts.entries()]
+      .filter(([libId]) => hasDataByLib.has(libId))
+      .map(async ([libId, count]) => {
+        const libEx = await Db.getLibraryExercise(libId);
+        return libEx ? { libId, count, name: libEx.name } : null;
+      })
   );
   const q = (filterText || "").trim().toLowerCase();
   // Tri alphabétique (à la demande de Christine du 14/09/2026) - avant,
@@ -1558,7 +1571,7 @@ async function renderProgressList(filterText) {
   if (entries.length === 0) {
     const empty = document.createElement("div");
     empty.className = "progress-empty";
-    empty.textContent = counts.size === 0
+    empty.textContent = hasDataByLib.size === 0
       ? "Pas encore d'historique - ajoute des séances pour voir ta progression ici."
       : "Aucun exercice ne correspond à cette recherche.";
     listEl.appendChild(empty);
@@ -1610,15 +1623,19 @@ async function buildProgressSeries(libId) {
       points.push({ date, value: ex.targetReps, unit: "reps" });
       continue;
     }
-    let best = null;
+    // Poids du DERNIER tour renseigné de la séance (pas le plus lourd des
+    // tours) - à la demande de Christine du 14/09/2026 : si elle a fait
+    // plusieurs tours à des poids différents, c'est la charge du dernier
+    // tour qui doit apparaître dans le graphique de progression.
+    let last = null;
     for (const round of ex.rounds || []) {
       if (!round.weight) continue;
       const total = ex.type === "barre"
         ? round.weight.bar + round.weight.added * 2
         : round.weight.perHand * 2;
-      if (best === null || total > best) best = total;
+      last = total;
     }
-    if (best !== null) points.push({ date, value: best, unit: "kg" });
+    if (last !== null) points.push({ date, value: last, unit: "kg" });
   }
   points.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return points;
