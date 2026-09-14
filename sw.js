@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v44";
+const CACHE_NAME = "carnet-muscu-v45";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -110,6 +110,14 @@ const CACHE_NAME = "carnet-muscu-v44";
 // n'importe quel écran. goTo() empile maintenant une entrée d'historique à
 // chaque changement d'écran, et un écouteur "popstate" intercepte ce
 // retour pour rouvrir le journal plutôt que de laisser le geste continuer)
+// (v45 : corrige un risque de perte de données trouvé en relecture de code -
+// mergeBackupData() ne protégeait la fusion "le plus récent gagne" que si
+// l'enregistrement REÇU avait un horodatage "updatedAt" renseigné ; un
+// enregistrement reçu sans cet horodatage (vieil export json d'avant
+// l'existence du champ, ou fichier modifié à la main) pouvait donc écraser
+// sans condition une version locale plus récente. Un horodatage absent
+// compte maintenant comme "le plus vieux possible" plutôt que de désactiver
+// la comparaison)
 const APP_SHELL = [
   "./",
   "./index.html",

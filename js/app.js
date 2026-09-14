@@ -1958,7 +1958,17 @@ async function mergeBackupData(data) {
         (localSession && localSession.updatedAt) || 0,
         Db.recentLocalWriteTime(s.id)
       );
-      if (effectiveLocalUpdatedAt && sessionFields.updatedAt && sessionFields.updatedAt <= effectiveLocalUpdatedAt) {
+      // Un enregistrement reçu SANS updatedAt (vieux fichier exporté avant
+      // l'ajout de ce champ, ou JSON modifié à la main) était auparavant
+      // toujours appliqué, même par-dessus une version locale plus récente -
+      // la condition exigeait un `sessionFields.updatedAt` déjà vrai pour
+      // déclencher la comparaison, donc son absence désactivait complètement
+      // la protection au lieu de la faire jouer prudemment (trouvé en revue
+      // de code le 14/09/2026). On compare maintenant à `|| 0` (un
+      // enregistrement sans date est traité comme le plus ancien possible)
+      // et on ne se fie plus qu'à l'EXISTENCE d'une version locale, jamais à
+      // la simple présence d'un horodatage dessus.
+      if (localSession && (sessionFields.updatedAt || 0) <= effectiveLocalUpdatedAt) {
         sessionSkippedCount++;
       } else {
         await Db.updateSession(sessionFields, { preserveTimestamp: true });
@@ -1968,7 +1978,7 @@ async function mergeBackupData(data) {
         if (!ex || !ex.id) continue;
         const localEx = await Db.getExerciseSession(ex.id);
         const effectiveLocalExUpdatedAt = Math.max((localEx && localEx.updatedAt) || 0, Db.recentLocalWriteTime(ex.id));
-        if (effectiveLocalExUpdatedAt && ex.updatedAt && ex.updatedAt <= effectiveLocalExUpdatedAt) {
+        if (localEx && (ex.updatedAt || 0) <= effectiveLocalExUpdatedAt) {
           exerciseSkippedCount++;
           continue;
         }
@@ -1991,7 +2001,9 @@ async function mergeBackupData(data) {
       }
       const local = await Db.getLibraryExercise(libEx.id);
       const effectiveLocalLibUpdatedAt = Math.max((local && local.updatedAt) || 0, Db.recentLocalWriteTime(libEx.id));
-      if (effectiveLocalLibUpdatedAt && libEx.updatedAt && libEx.updatedAt <= effectiveLocalLibUpdatedAt) {
+      // Même correctif que pour les séances ci-dessus : un exercice reçu
+      // sans updatedAt ne doit jamais écraser une version locale existante.
+      if (local && (libEx.updatedAt || 0) <= effectiveLocalLibUpdatedAt) {
         librarySkippedCount++;
         continue;
       }
