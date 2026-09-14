@@ -108,24 +108,33 @@ function stripAccents(str) {
   return str.normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
-// Une requête correspond si le nom contient directement le texte tapé, ou si
-// la requête (ou le nom) correspond à une entrée du dictionnaire ci-dessus.
-// Le dictionnaire de synonymes n'est consulté qu'à partir de 3 caractères,
+// Termes du dictionnaire de synonymes qui s'appliquent à une requête déjà
+// normalisée (accents retirés, minuscules) - factorisé ici car matchesSearch
+// et searchRelevanceScore avaient chacune leur propre copie de cette boucle,
+// ce qui faisait courir le risque de les faire diverger à la prochaine
+// modification du dictionnaire. N'est consulté qu'à partir de 3 caractères,
 // sinon une requête très courte ("e", "a"...) matche presque toutes les clés
 // et noie la recherche sous des résultats sans rapport.
+function synonymTermsFor(q) {
+  if (q.length < 3) return [];
+  const terms = [];
+  for (const key in SEARCH_SYNONYMS) {
+    const k = stripAccents(key);
+    if (q.includes(k) || k.includes(q)) {
+      for (const term of SEARCH_SYNONYMS[key]) terms.push(stripAccents(term));
+    }
+  }
+  return terms;
+}
+
+// Une requête correspond si le nom contient directement le texte tapé, ou si
+// la requête (ou le nom) correspond à une entrée du dictionnaire ci-dessus.
 function matchesSearch(name, rawQ) {
   if (!rawQ) return true;
   const n = stripAccents(name.toLowerCase());
   const q = stripAccents(rawQ.toLowerCase());
   if (n.includes(q)) return true;
-  if (q.length < 3) return false;
-  for (const key in SEARCH_SYNONYMS) {
-    const k = stripAccents(key);
-    if (q.includes(k) || k.includes(q)) {
-      if (SEARCH_SYNONYMS[key].some((term) => n.includes(stripAccents(term)))) return true;
-    }
-  }
-  return false;
+  return synonymTermsFor(q).some((term) => n.includes(term));
 }
 
 // Score de pertinence pour trier les résultats de recherche (à la demande de
@@ -150,16 +159,9 @@ function searchRelevanceScore(name, rawQ) {
     return 1; // simple sous-chaîne (ex. "lunge" dans "lunges", peu probable ici mais defensif)
   };
   let best = rankFor(q);
-  if (q.length >= 3) {
-    for (const key in SEARCH_SYNONYMS) {
-      const k = stripAccents(key);
-      if (q.includes(k) || k.includes(q)) {
-        for (const term of SEARCH_SYNONYMS[key]) {
-          const r = rankFor(stripAccents(term));
-          if (r > best) best = r;
-        }
-      }
-    }
+  for (const term of synonymTermsFor(q)) {
+    const r = rankFor(term);
+    if (r > best) best = r;
   }
   return best;
 }
@@ -1258,21 +1260,32 @@ function buildModalChips() {
 
 // Comme buildChipRow, mais l'action de sélection ne relance pas renderLibrary
 // (utilisée à la fois par la bibliothèque et par la modale d'ajout).
+// Les boutons ne sont créés qu'une fois (voir row.dataset.built), mais le
+// surlignage "sel" est resynchronisé sur getSelected() à CHAQUE appel, pas
+// seulement à la construction - avant ce correctif, rouvrir la modale (dont
+// les chips ne sont construits qu'une fois) ne mettait jamais à jour le chip
+// sélectionné tout seul : openExerciseModal() devait le refaire à la main en
+// comparant le libellé affiché à des chaînes en dur ("★ Favoris", "Tout"...),
+// fragile si un libellé venait à changer.
 function buildChipRowCustom(rowId, chips, getSelected, onSelect) {
   const row = document.getElementById(rowId);
-  if (row.dataset.built) return;
-  row.dataset.built = "1";
-  for (const c of chips) {
-    const btn = document.createElement("button");
-    btn.className = "lib-cat-chip" + (getSelected() === c.key ? " sel" : "");
-    btn.textContent = c.label;
-    btn.addEventListener("click", () => {
-      onSelect(c.key);
-      row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.remove("sel"));
-      btn.classList.add("sel");
-    });
-    row.appendChild(btn);
+  if (!row.dataset.built) {
+    row.dataset.built = "1";
+    for (const c of chips) {
+      const btn = document.createElement("button");
+      btn.className = "lib-cat-chip";
+      btn.textContent = c.label;
+      btn.dataset.chipKey = JSON.stringify(c.key);
+      btn.addEventListener("click", () => {
+        onSelect(c.key);
+        row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.remove("sel"));
+        btn.classList.add("sel");
+      });
+      row.appendChild(btn);
+    }
   }
+  const selectedKey = JSON.stringify(getSelected());
+  row.querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.dataset.chipKey === selectedKey));
 }
 
 function openExerciseModal() {
@@ -1295,9 +1308,6 @@ function openExerciseModal() {
   document.getElementById("modal-quickfilter-group").hidden = false;
   document.getElementById("modal-categories-group").hidden = false;
   document.getElementById("modal-equipment-group").hidden = false;
-  document.getElementById("modal-quickfilter").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "★ Favoris"));
-  document.getElementById("modal-categories").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout"));
-  document.getElementById("modal-equipment").querySelectorAll(".lib-cat-chip").forEach((b) => b.classList.toggle("sel", b.textContent === "Tout matériel"));
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("exercise-modal").classList.add("open");
   // Pas de focus auto sur le champ : sur téléphone ça ouvre le clavier tout

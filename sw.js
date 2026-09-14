@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v45";
+const CACHE_NAME = "carnet-muscu-v46";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -118,6 +118,16 @@ const CACHE_NAME = "carnet-muscu-v45";
 // sans condition une version locale plus récente. Un horodatage absent
 // compte maintenant comme "le plus vieux possible" plutôt que de désactiver
 // la comparaison)
+// (v46 : trois corrections de maintenabilité issues de la même relecture de
+// code, sans changement visible pour Christine - 1) buildChipRowCustom()
+// resynchronise maintenant le chip surligné à chaque appel au lieu d'une
+// seule fois à la construction, ce qui permet de retirer le contournement
+// qui comparait le libellé affiché à des chaînes en dur ("★ Favoris",
+// "Tout"...) dans openExerciseModal(). 2) la boucle de recherche dans le
+// dictionnaire de synonymes était dupliquée entre matchesSearch() et
+// searchRelevanceScore() - factorisée dans synonymTermsFor(). 3) le tri de
+// Db.getAllLibraryExercises() ignorait la casse/accents contrairement au
+// reste de l'appli - ajoute sensitivity:"base")
 const APP_SHELL = [
   "./",
   "./index.html",

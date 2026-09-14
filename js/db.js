@@ -322,7 +322,7 @@ const Db = {
       const t = tx(db, ["library"], "readonly");
       const req = t.objectStore("library").getAll();
       req.onsuccess = () =>
-        resolve(req.result.sort((a, b) => a.name.localeCompare(b.name, "fr")));
+        resolve(req.result.sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" })));
       req.onerror = () => reject(req.error);
     });
   },
