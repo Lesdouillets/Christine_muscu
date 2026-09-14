@@ -1532,19 +1532,19 @@ async function renderProgressList(filterText) {
   listEl.innerHTML = "";
   const allEx = await Db.getAllExerciseSessions();
   const counts = new Map(); // libraryExerciseId -> nombre de séances
-  // Un exercice ajouté à une séance sans jamais avoir indiqué de poids (ni
-  // de répétitions pour un exercice au poids du corps) n'a rien à montrer
-  // dans le graphique de progression - inutile de l'afficher dans la liste
-  // (remonté par Christine du 14/09/2026 : "il y a des exercices qui ont
-  // déjà été fait mais je n'avais pas indiqué le poids donc ça ne sert à
-  // rien de les voir dans progrès").
+  // Un exercice ajouté à une séance sans jamais avoir enregistré de poids
+  // n'a rien à montrer dans le graphique de progression - inutile de
+  // l'afficher dans la liste (remonté par Christine du 14/09/2026). Les
+  // exercices au poids du corps ou à l'élastique (planche, montée de corde…)
+  // ne suivent que des répétitions, jamais un poids - Christine ne veut pas
+  // non plus les voir dans progrès, qui ne concerne que le suivi de charge
+  // (précisé le 14/09/2026 : "pas besoin de mettre les exercices ... qui
+  // n'ont pas de poids et que des reps").
   const hasDataByLib = new Set();
   for (const ex of allEx) {
-    if (!ex.libraryExerciseId) continue;
+    if (!ex.libraryExerciseId || isWeightlessType(ex.type)) continue;
     counts.set(ex.libraryExerciseId, (counts.get(ex.libraryExerciseId) || 0) + 1);
-    const exHasData = isWeightlessType(ex.type)
-      ? ex.targetReps != null
-      : (ex.rounds || []).some((r) => r.weight);
+    const exHasData = (ex.rounds || []).some((r) => r.weight);
     if (exHasData) hasDataByLib.add(ex.libraryExerciseId);
   }
   // Nom actuel (pas celui enregistré au moment de l'ajout, qui peut être

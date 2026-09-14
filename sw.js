@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v42";
+const CACHE_NAME = "carnet-muscu-v43";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -100,6 +100,10 @@ const CACHE_NAME = "carnet-muscu-v42";
 // séance sans jamais avoir indiqué de poids (ni de répétitions pour un
 // exercice au poids du corps) n'apparaît plus dans la liste progrès - il
 // n'y a rien à y montrer)
+// (v43 : onglet progrès - Christine a précisé que les exercices au poids du
+// corps ou à l'élastique (planche, montée de corde…) ne doivent jamais
+// apparaître dans progrès, même s'ils ont des répétitions enregistrées :
+// cet onglet ne concerne que le suivi de charge)
 const APP_SHELL = [
   "./",
   "./index.html",
