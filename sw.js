@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v40";
+const CACHE_NAME = "carnet-muscu-v41";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -87,6 +87,12 @@ const CACHE_NAME = "carnet-muscu-v40";
 // sortByRelevance dans js/app.js) qui privilégie une correspondance directe
 // et un nom court, appliqué uniquement pendant une recherche texte -
 // l'ordre alphabétique reste utilisé pour parcourir sans rien taper)
+// (v41 : onglet progrès, à la demande de Christine du 14/09/2026 - 1) la
+// liste était triée par nombre de séances décroissant, ce qui la remélangeait
+// à chaque nouvelle séance ; trie maintenant par ordre alphabétique. 2) les
+// noms d'exercice (jeu de données en anglais, tout minuscules) affichent
+// maintenant une majuscule sur la première lettre seulement (voir
+// capitalizeFirst dans js/app.js))
 const APP_SHELL = [
   "./",
   "./index.html",

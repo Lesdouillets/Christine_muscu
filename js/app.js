@@ -279,6 +279,16 @@ function escapeHtml(str) {
   return d.innerHTML;
 }
 
+// Majuscule sur la première lettre seulement (pas sur chaque mot comme le
+// text-transform:capitalize utilisé pour la bibliothèque) - à la demande de
+// Christine du 14/09/2026 pour l'onglet progrès : les noms d'exercice du
+// jeu de données sont en anglais et tout en minuscules ("dumbbell lunge"),
+// elle veut juste "Dumbbell lunge", pas "Dumbbell Lunge".
+function capitalizeFirst(str) {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 // ---------- Nouvelle séance (formulaire) ----------
 
 function openNewSessionForm() {
@@ -1535,10 +1545,14 @@ async function renderProgressList(filterText) {
     })
   );
   const q = (filterText || "").trim().toLowerCase();
+  // Tri alphabétique (à la demande de Christine du 14/09/2026) - avant,
+  // c'était trié par nombre de séances décroissant, ce qui mélangeait
+  // l'ordre à chaque nouvelle séance et rendait un exercice précis plus
+  // difficile à retrouver dans une longue liste.
   const entries = withNames
     .filter(Boolean)
     .filter((v) => matchesSearch(v.name, q))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "fr"))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }))
     .map((v) => [v.libId, v]);
 
   if (entries.length === 0) {
@@ -1554,8 +1568,10 @@ async function renderProgressList(filterText) {
   for (const [libId, v] of entries) {
     const item = document.createElement("button");
     item.className = "progress-item";
+    // Majuscule sur la première lettre seulement (voir capitalizeFirst) -
+    // les noms du jeu de données sont en anglais tout minuscules.
     item.innerHTML = `
-      <span class="progress-item-name">${escapeHtml(v.name)}</span>
+      <span class="progress-item-name">${escapeHtml(capitalizeFirst(v.name))}</span>
       <span class="progress-item-count">${v.count} séance${v.count > 1 ? "s" : ""}</span>
     `;
     item.addEventListener("click", () => openProgressDetail(libId, v.name));
@@ -1566,7 +1582,7 @@ async function renderProgressList(filterText) {
 async function openProgressDetail(libId, name) {
   progressSelectedLibId = libId;
   progressShowTable = false;
-  document.getElementById("progress-detail-name").textContent = name;
+  document.getElementById("progress-detail-name").textContent = capitalizeFirst(name);
   document.getElementById("progress-list-wrap").hidden = true;
   document.getElementById("progress-detail-wrap").hidden = false;
   await renderProgressDetail();
