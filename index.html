@@ -268,7 +268,11 @@
           <option value="barre">Barre</option>
           <option value="halteres">Haltères</option>
           <option value="poids_du_corps">Poids du corps</option>
+          <option value="banc">Banc</option>
           <option value="elastique">Élastique</option>
+          <option value="cable">Câble</option>
+          <option value="machine">Machine</option>
+          <option value="kettlebell">Kettlebell</option>
         </select>
       </div>
       <div class="field" style="margin:0;">
@@ -316,6 +320,18 @@
     </div>
     <button class="lib-detail-fav" id="lib-detail-fav-btn">★ Ajouter aux favoris</button>
     <div class="lib-detail-meta" id="lib-detail-meta"></div>
+    <button class="ghost-btn" id="lib-detail-material-btn">Changer le matériel</button>
+    <div class="field" id="lib-detail-material-field" style="margin:0;" hidden>
+      <span class="field-label">Matériel principal (pilote la saisie du poids par tour)</span>
+      <select id="lib-detail-material-primary"></select>
+      <span class="field-label">Matériels secondaires (juste pour le retrouver dans plusieurs filtres)</span>
+      <div class="lib-cat-row" id="lib-detail-material-secondary"></div>
+      <p class="sync-hint" id="lib-detail-material-warning" hidden>Les séances déjà enregistrées avec cet exercice seront aussi mises à jour. Si l'ancien matériel attendait une autre forme de poids, les valeurs déjà saisies peuvent ne plus s'afficher correctement pour ces séances passées.</p>
+      <div class="lib-detail-rename-actions">
+        <button class="primary-btn" id="lib-detail-material-save">Enregistrer</button>
+        <button class="ghost-btn" id="lib-detail-material-cancel">Annuler</button>
+      </div>
+    </div>
     <div class="lib-detail-instr" id="lib-detail-instr"></div>
     <div class="field" style="margin:0;">
       <span class="field-label">Note personnelle (visible pendant les séances)</span>
@@ -439,7 +455,11 @@
         <option value="barre">Barre</option>
         <option value="halteres">Haltères</option>
         <option value="poids_du_corps">Poids du corps</option>
+        <option value="banc">Banc</option>
         <option value="elastique">Élastique</option>
+        <option value="cable">Câble</option>
+        <option value="machine">Machine</option>
+        <option value="kettlebell">Kettlebell</option>
         <option value="inconnu">Autre / à classer</option>
       </select>
     </div>

@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v46";
+const CACHE_NAME = "carnet-muscu-v47";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -128,6 +128,17 @@ const CACHE_NAME = "carnet-muscu-v46";
 // searchRelevanceScore() - factorisée dans synonymTermsFor(). 3) le tri de
 // Db.getAllLibraryExercises() ignorait la casse/accents contrairement au
 // reste de l'appli - ajoute sensitivity:"base")
+// (v47 : modèle "matériel" unifié, à la demande de Christine du 16/09/2026 -
+// 1) le matériel d'un exercice (Haltères/Barre/Banc/Câble/Machine/
+// Kettlebell/…) se change maintenant depuis sa fiche bibliothèque ("Changer
+// le matériel"), et ce changement met aussi à jour les séances déjà
+// enregistrées avec cet exercice. 2) le matériel "Banc" ne demande plus de
+// poids à saisir, comme poids du corps/élastique. 3) un exercice peut avoir
+// des matériels secondaires (en plus du principal) juste pour le retrouver
+// dans plusieurs filtres, sans toucher à la saisie de poids. Les exercices du
+// jeu de données déjà importés avant cette version sont reclassés une seule
+// fois au démarrage (câble/machine/kettlebell/banc n'existaient pas comme
+// matériel principal avant)
 const APP_SHELL = [
   "./",
   "./index.html",

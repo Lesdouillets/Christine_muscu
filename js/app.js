@@ -45,7 +45,11 @@ async function seedPublicLibraryIfNeeded() {
     const records = data.map((e) => ({
       id: "ds-" + e.id,
       name: e.name,
-      type: e.type,
+      // Classification initiale par le matériel brut du jeu de données (voir
+      // classifyMaterialFromEquipment) plutôt que le champ "type" fourni tel
+      // quel - celui-ci ne distinguait que barre/haltères/poids du corps,
+      // sans câble/machine/kettlebell/banc.
+      type: classifyMaterialFromEquipment(e),
       bodyPart: e.bodyPart,
       equipment: e.equipment,
       target: e.target,
@@ -607,13 +611,15 @@ async function buildExerciseCard(session, ex, last) {
 }
 
 function typeLabel(type) {
-  return { barre: "barre", halteres: "haltères", poids_du_corps: "poids du corps", elastique: "élastique", inconnu: "à classer" }[type] || type;
+  return (MATERIAL_LABELS[type] || type || "").toLowerCase();
 }
 // Types sans charge chiffrée à saisir tour par tour (juste le ressenti) -
 // l'élastique s'ajoute au poids du corps à la demande de Christine : la
 // résistance d'une bande n'est pas un poids en kg qu'on peut suivre pareil.
+// "Banc" rejoint ces deux-là à la demande de Christine du 16/09/2026 : "si
+// j'utilise le matériel banc, pas besoin de mettre de poids".
 function isWeightlessType(type) {
-  return type === "poids_du_corps" || type === "elastique";
+  return type === "poids_du_corps" || type === "elastique" || type === "banc";
 }
 function feelingLabel(f) {
   return { light: "trop léger", good: "bien", heavy: "trop lourd" }[f] || "";
@@ -905,21 +911,115 @@ function categoryOf(ex) {
 // visible sans avoir a faire defiler la rangee sur telephone - a la demande
 // de Christine, qui ne le voyait pas alors qu'il existait deja plus loin
 // dans la liste.
-const EQUIPMENT_CATEGORIES = [
-  { key: "poids_du_corps", label: "Poids du corps", equipment: ["body weight", "assisted"] },
-  { key: "halteres", label: "Haltères", equipment: ["dumbbell"] },
-  { key: "barre", label: "Barre", equipment: ["barbell", "ez barbell", "olympic barbell", "trap bar"] },
-  { key: "elastique", label: "Élastique", equipment: ["band", "resistance band"] },
-  { key: "cable", label: "Câble", equipment: ["cable"] },
-  { key: "machine", label: "Machine", equipment: ["leverage machine", "smith machine", "sled machine", "stepmill machine", "elliptical machine", "upper body ergometer", "skierg machine", "stationary bike"] },
-  { key: "kettlebell", label: "Kettlebell", equipment: ["kettlebell"] },
+//
+// Modèle "matériel" unifié (à la demande de Christine du 16/09/2026, suite à
+// trois demandes liées : pouvoir changer le matériel d'un exercice depuis la
+// bibliothèque et que ça change aussi les séances, un matériel "Banc" sans
+// charge à saisir, et pouvoir classer un exercice sur plusieurs matériels).
+// Choix validé par Christine (voir AskUserQuestion) : chaque exercice a UN
+// matériel PRINCIPAL (ex.type - même champ qu'avant, qui pilotait déjà la
+// forme de saisie du poids par tour) qui pilote seul la saisie de poids, et
+// peut en plus avoir des matériels SECONDAIRES (ex.secondaryTypes, tableau)
+// qui ne servent qu'à le retrouver dans plusieurs filtres sans toucher à la
+// saisie de poids. "Banc" et "Poids du corps"/"Élastique" sont sans charge à
+// saisir - voir isWeightlessType ci-dessous.
+const MATERIAL_TYPES = [
+  { key: "poids_du_corps", label: "Poids du corps" },
+  { key: "halteres", label: "Haltères" },
+  { key: "barre", label: "Barre" },
+  { key: "banc", label: "Banc" },
+  { key: "elastique", label: "Élastique" },
+  { key: "cable", label: "Câble" },
+  { key: "machine", label: "Machine" },
+  { key: "kettlebell", label: "Kettlebell" },
+  { key: "inconnu", label: "Autre / à classer" },
 ];
-const EQUIPMENT_TO_CATEGORY = {};
-for (const cat of EQUIPMENT_CATEGORIES) {
-  for (const e of cat.equipment) EQUIPMENT_TO_CATEGORY[e] = cat.key;
+const MATERIAL_LABELS = {};
+for (const m of MATERIAL_TYPES) MATERIAL_LABELS[m.key] = m.label;
+
+// Classification automatique initiale, à partir du champ matériel brut du
+// jeu de données (et du nom anglais pour détecter un exercice fait sur banc,
+// ex. "Dumbbell Bench Press" - absent du jeu de données comme valeur de
+// matériel à part). Sert 1) au premier import de la bibliothèque publique et
+// 2) à la migration ponctuelle des exercices déjà importés avant cette
+// version (voir migrateLibraryMaterialTypes) - jamais appliquée à un exercice
+// dont Christine a choisi le matériel à la main (ex.typeManuallySet).
+const RAW_EQUIPMENT_TO_MATERIAL = {
+  "body weight": "poids_du_corps",
+  "assisted": "poids_du_corps",
+  "dumbbell": "halteres",
+  "barbell": "barre",
+  "ez barbell": "barre",
+  "olympic barbell": "barre",
+  "trap bar": "barre",
+  "band": "elastique",
+  "resistance band": "elastique",
+  "cable": "cable",
+  "leverage machine": "machine",
+  "smith machine": "machine",
+  "sled machine": "machine",
+  "stepmill machine": "machine",
+  "elliptical machine": "machine",
+  "upper body ergometer": "machine",
+  "skierg machine": "machine",
+  "stationary bike": "machine",
+  "kettlebell": "kettlebell",
+};
+function classifyMaterialFromEquipment(ex) {
+  if ((ex.name || "").toLowerCase().includes("bench")) return "banc";
+  return RAW_EQUIPMENT_TO_MATERIAL[(ex.equipment || "").toLowerCase()] || ex.type || "inconnu";
 }
-function equipmentCategoryOf(ex) {
-  return EQUIPMENT_TO_CATEGORY[(ex.equipment || "").toLowerCase()] || "autre";
+
+// Un exercice correspond à un chip matériel s'il a ce matériel en principal
+// OU en secondaire (voir le commentaire sur MATERIAL_TYPES ci-dessus).
+function exerciseHasMaterial(ex, key) {
+  if (!key) return true;
+  return ex.type === key || (ex.secondaryTypes || []).includes(key);
+}
+
+// Change le matériel principal d'un exercice de bibliothèque et répercute ce
+// changement sur toutes les séances déjà enregistrées avec cet exercice - à
+// la demande explicite de Christine ("qui changera dans les séances"). Ne
+// touche jamais aux poids déjà saisis tour par tour : si l'ancien matériel
+// attendait une autre forme de saisie (ex. barre -> haltères), les anciens
+// poids peuvent ne plus s'afficher correctement pour ces séances passées -
+// risque assumé par Christine (voir AskUserQuestion).
+async function applyMaterialTypeChange(libEx, newType, opts = {}) {
+  const manual = opts.manual !== false;
+  libEx.type = newType;
+  libEx.typeManuallySet = manual;
+  libEx.updatedAt = Date.now();
+  await Db.updateLibraryExercise(libEx);
+  const sessions = await Db.getExerciseSessionsByLibraryId(libEx.id);
+  for (const es of sessions) {
+    es.type = newType;
+    await Db.updateExerciseSession(es);
+  }
+}
+
+// Migration ponctuelle (une seule fois par appareil) : reclassifie les
+// exercices déjà importés avant l'ajout du modèle matériel unifié, avec la
+// même logique que le nouvel import (voir classifyMaterialFromEquipment) -
+// sans quoi "Câble"/"Machine"/"Kettlebell"/"Banc" resteraient vides pour tout
+// ce qui a été importé avant cette version.
+async function migrateLibraryMaterialTypes() {
+  const FLAG = "carnetMuscuMaterialMigrationV1";
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const all = await Db.getAllLibraryExercises();
+    for (const ex of all) {
+      if (ex.typeManuallySet) continue;
+      const classified = classifyMaterialFromEquipment(ex);
+      if (classified && classified !== ex.type) {
+        // La migration reclasse d'après une règle automatique, pas un choix
+        // de Christine - manual:false pour ne pas bloquer une reclassification
+        // future si la règle automatique est encore améliorée.
+        await applyMaterialTypeChange(ex, classified, { manual: false });
+      }
+    }
+  } finally {
+    localStorage.setItem(FLAG, "1");
+  }
 }
 
 let libraryCategory = null; // null = "Tout" (filtre par muscle)
@@ -935,7 +1035,7 @@ function renderLibraryCategoryChips() {
   );
   buildChipRowCustom(
     "library-equipment",
-    [{ key: null, label: "Tout matériel" }, ...EQUIPMENT_CATEGORIES, { key: "autre", label: "Autre" }],
+    [{ key: null, label: "Tout matériel" }, ...MATERIAL_TYPES],
     () => libraryEquipment,
     (key) => { libraryEquipment = key; renderLibrary(document.getElementById("library-search").value); }
   );
@@ -962,7 +1062,7 @@ async function renderLibrary(filterText) {
     results = results.filter((ex) => categoryOf(ex) === libraryCategory);
   }
   if (libraryEquipment) {
-    results = results.filter((ex) => equipmentCategoryOf(ex) === libraryEquipment);
+    results = results.filter((ex) => exerciseHasMaterial(ex, libraryEquipment));
   }
   // Ordre alphabétique par défaut quand on ne tape rien (à la demande de
   // Christine) ; trié par pertinence dès qu'une recherche est en cours (voir
@@ -1070,16 +1170,46 @@ async function bumpLibraryUsage(libraryExerciseId) {
   await recomputeLibraryUsageCount(libraryExerciseId);
 }
 
+// Texte affiché sous le nom d'un exercice dans sa fiche détail - remplace
+// l'ancien affichage du champ matériel brut du jeu de données (en anglais,
+// peu lisible) par le matériel principal/secondaires choisis (voir
+// MATERIAL_TYPES) maintenant que ce champ est modifiable par Christine.
+function libDetailMetaText(ex) {
+  const materialParts = [MATERIAL_LABELS[ex.type] || ex.type];
+  if (ex.secondaryTypes && ex.secondaryTypes.length) {
+    materialParts.push("aussi : " + ex.secondaryTypes.map((k) => MATERIAL_LABELS[k] || k).join(", "));
+  }
+  const usage = ex.usageCount || 0;
+  return [materialParts.join(" - "), ex.target, ex.bodyPart, usage > 0 ? `utilisé ${usage}×` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+// Construit (une seule fois) les chips des matériels secondaires possibles
+// pour la fiche détail d'un exercice - exclut le matériel choisi comme
+// principal, qui ne peut pas être aussi secondaire.
+function renderLibDetailSecondaryChips(primaryKey, selectedKeys) {
+  const row = document.getElementById("lib-detail-material-secondary");
+  row.innerHTML = "";
+  for (const m of MATERIAL_TYPES) {
+    if (m.key === primaryKey) continue;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "lib-cat-chip" + (selectedKeys.includes(m.key) ? " sel" : "");
+    btn.textContent = m.label;
+    btn.dataset.key = m.key;
+    btn.addEventListener("click", () => btn.classList.toggle("sel"));
+    row.appendChild(btn);
+  }
+}
+
 function openLibraryDetail(ex) {
   const gifUrl = gifUrlOf(ex);
   document.getElementById("lib-detail-gif").innerHTML = gifUrl
     ? `<img src="${gifUrl}" alt="${escapeHtml(ex.name)}">`
     : `<div class="lib-detail-noGif">pas de démonstration pour cet exercice</div>`;
   document.getElementById("lib-detail-name").textContent = ex.name;
-  const usage = ex.usageCount || 0;
-  document.getElementById("lib-detail-meta").textContent = [ex.equipment, ex.target, ex.bodyPart, usage > 0 ? `utilisé ${usage}×` : null]
-    .filter(Boolean)
-    .join(" · ") || typeLabel(ex.type);
+  document.getElementById("lib-detail-meta").textContent = libDetailMetaText(ex);
   document.getElementById("lib-detail-instr").textContent = ex.instructionsFr || "";
   // Note personnelle (à la demande de Christine) : modifiable ici comme
   // depuis une séance, mais elle ne sert vraiment que pendant les séances -
@@ -1092,6 +1222,51 @@ function openLibraryDetail(ex) {
     await Db.updateLibraryExercise(ex);
   };
   document.getElementById("lib-detail-rename-field").hidden = true;
+  // Modifier le matériel principal/secondaires (à la demande de Christine du
+  // 16/09/2026). Le select est peuplé une seule fois (voir dataset.built) -
+  // seule sa valeur et les chips secondaires changent à chaque ouverture.
+  const materialSelect = document.getElementById("lib-detail-material-primary");
+  if (!materialSelect.dataset.built) {
+    materialSelect.dataset.built = "1";
+    for (const m of MATERIAL_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = m.key;
+      opt.textContent = m.label;
+      materialSelect.appendChild(opt);
+    }
+  }
+  const materialField = document.getElementById("lib-detail-material-field");
+  const materialWarning = document.getElementById("lib-detail-material-warning");
+  materialField.hidden = true;
+  document.getElementById("lib-detail-material-btn").onclick = () => {
+    materialSelect.value = ex.type || "inconnu";
+    renderLibDetailSecondaryChips(ex.type, ex.secondaryTypes || []);
+    materialWarning.hidden = true;
+    materialField.hidden = false;
+  };
+  materialSelect.onchange = () => {
+    const currentSecondary = [...document.querySelectorAll("#lib-detail-material-secondary .lib-cat-chip.sel")].map((b) => b.dataset.key);
+    renderLibDetailSecondaryChips(materialSelect.value, currentSecondary);
+    // Avertit seulement si le matériel PRINCIPAL change vraiment - un simple
+    // ajustement des matériels secondaires ne touche jamais aux poids saisis.
+    materialWarning.hidden = materialSelect.value === (ex.type || "inconnu");
+  };
+  document.getElementById("lib-detail-material-cancel").onclick = () => {
+    materialField.hidden = true;
+  };
+  document.getElementById("lib-detail-material-save").onclick = async () => {
+    const newPrimary = materialSelect.value;
+    ex.secondaryTypes = [...document.querySelectorAll("#lib-detail-material-secondary .lib-cat-chip.sel")].map((b) => b.dataset.key);
+    if (newPrimary !== ex.type) {
+      await applyMaterialTypeChange(ex, newPrimary);
+    } else {
+      ex.updatedAt = Date.now();
+      await Db.updateLibraryExercise(ex);
+    }
+    materialField.hidden = true;
+    document.getElementById("lib-detail-meta").textContent = libDetailMetaText(ex);
+    await renderLibrary(document.getElementById("library-search").value);
+  };
   // Remplacer le gif par un lien (à la demande de Christine, après qu'une
   // photo ajoutée depuis son téléphone ait rendu une sauvegarde trop
   // volumineuse pour la synchronisation cloud - voir js/sync.js). Ne propose
@@ -1252,7 +1427,7 @@ function buildModalChips() {
   );
   buildChipRowCustom(
     "modal-equipment",
-    [{ key: null, label: "Tout matériel" }, ...EQUIPMENT_CATEGORIES, { key: "autre", label: "Autre" }],
+    [{ key: null, label: "Tout matériel" }, ...MATERIAL_TYPES],
     () => modalEquipment,
     (key) => { modalEquipment = key; searchExercisesInModal(document.getElementById("exercise-search-input").value); }
   );
@@ -1365,7 +1540,7 @@ async function searchExercisesInModal(query) {
   pendingExistingLibEx = null;
   let results = (await Db.getAllLibraryExercises()).filter((ex) => matchesSearch(ex.name, q));
   if (modalCategory) results = results.filter((ex) => categoryOf(ex) === modalCategory);
-  if (modalEquipment) results = results.filter((ex) => equipmentCategoryOf(ex) === modalEquipment);
+  if (modalEquipment) results = results.filter((ex) => exerciseHasMaterial(ex, modalEquipment));
   if (modalFavoritesOnly) results = results.filter((ex) => ex.favorite);
   // Ordre alphabétique par défaut quand on ne tape rien, trié par pertinence
   // dès qu'une recherche est en cours - comme dans la bibliothèque (voir
@@ -2507,9 +2682,11 @@ async function init() {
   await Db.init();
   await migrateFavoritesForAlreadyUsedExercises();
   await migrateUsageCountsFromRealData();
-  seedPublicLibraryIfNeeded().then(() => {
-    // Une fois l'import terminé, on rafraîchit la bibliothèque si elle est
-    // affichée (premier lancement, avec connexion).
+  seedPublicLibraryIfNeeded().then(() => migrateLibraryMaterialTypes()).then(() => {
+    // Une fois l'import (et la reclassification matériel) terminés, on
+    // rafraîchit la bibliothèque si elle est affichée (premier lancement
+    // avec connexion, ou mise à jour de l'appli sur un appareil qui avait
+    // déjà sa bibliothèque importée).
     if (document.getElementById("view-library").classList.contains("active")) {
       renderLibrary(document.getElementById("library-search").value);
     }
