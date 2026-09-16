@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v48";
+const CACHE_NAME = "carnet-muscu-v49";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -144,6 +144,14 @@ const CACHE_NAME = "carnet-muscu-v48";
 // photo, la création de la séance n'est plus bloquée (demande de Christine
 // du 16/09/2026) : le nom détecté est gardé tel quel comme un tout nouvel
 // exercice de bibliothèque, modifiable ensuite depuis sa fiche)
+// (v49 : suite aux retours de Christine du 16/09/2026 sur le matériel -
+// 1) changer le matériel principal ou secondaire d'un exercice s'enregistre
+// maintenant directement à chaque choix, sans bouton "Enregistrer" séparé
+// (elle trouvait bizarre d'avoir à "enregistrer deux fois") - "Terminé" ne
+// fait plus que refermer le panneau. 2) ajoute "Box" et "Médecine ball" comme
+// matériels possibles. 3) les mots anglais "dumbbell"/"barbell" restés dans
+// le nom de beaucoup d'exercices du jeu de données sont traduits en
+// "haltère"/"barre")
 const APP_SHELL = [
   "./",
   "./index.html",

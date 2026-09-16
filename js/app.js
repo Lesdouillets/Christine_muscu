@@ -30,6 +30,17 @@ function goTo(viewName) {
   history.pushState({ view: viewName }, "", location.pathname);
 }
 
+// Traduit les mots anglais restés dans le nom des exercices du jeu de
+// données (à la demande de Christine du 16/09/2026 : "mets en français les
+// mots barbell et dumbbell") - le nom lui-même reste modifiable ensuite au
+// cas par cas depuis la fiche bibliothèque (bouton renommer), donc pas grave
+// si la traduction mot à mot est parfois un peu littérale.
+function frenchizeEquipmentWords(name) {
+  return (name || "")
+    .replace(/\bdumbbell\b/gi, "haltère")
+    .replace(/\bbarbell\b/gi, "barre");
+}
+
 // ---------- Import de la bibliothèque publique (phase 2) ----------
 // Import unique, au premier lancement, du jeu de données accepté avec
 // Christine (hasaneyldrm/exercises-dataset, cf. spec section 7). Les ids
@@ -44,7 +55,7 @@ async function seedPublicLibraryIfNeeded() {
     const data = await res.json();
     const records = data.map((e) => ({
       id: "ds-" + e.id,
-      name: e.name,
+      name: frenchizeEquipmentWords(e.name),
       // Classification initiale par le matériel brut du jeu de données (voir
       // classifyMaterialFromEquipment) plutôt que le champ "type" fourni tel
       // quel - celui-ci ne distinguait que barre/haltères/poids du corps,
@@ -932,10 +943,28 @@ const MATERIAL_TYPES = [
   { key: "cable", label: "Câble" },
   { key: "machine", label: "Machine" },
   { key: "kettlebell", label: "Kettlebell" },
+  { key: "medecine_ball", label: "Médecine ball" },
+  { key: "box", label: "Box" },
   { key: "inconnu", label: "Autre / à classer" },
 ];
 const MATERIAL_LABELS = {};
 for (const m of MATERIAL_TYPES) MATERIAL_LABELS[m.key] = m.label;
+
+// Peuple un <select> avec la liste des matériels (une seule fois - voir
+// dataset.built) - remplace trois listes d'options recopiées à la main dans
+// index.html (nouvel exercice depuis une séance, nouvel exercice depuis la
+// bibliothèque, fiche détail) qui se seraient désynchronisées à chaque ajout
+// de matériel (ex. Box, Médecine ball).
+function populateMaterialSelect(selectEl) {
+  if (selectEl.dataset.built) return;
+  selectEl.dataset.built = "1";
+  for (const m of MATERIAL_TYPES) {
+    const opt = document.createElement("option");
+    opt.value = m.key;
+    opt.textContent = m.label;
+    selectEl.appendChild(opt);
+  }
+}
 
 // Classification automatique initiale, à partir du champ matériel brut du
 // jeu de données (et du nom anglais pour détecter un exercice fait sur banc,
@@ -964,7 +993,13 @@ const RAW_EQUIPMENT_TO_MATERIAL = {
   "skierg machine": "machine",
   "stationary bike": "machine",
   "kettlebell": "kettlebell",
+  "medicine ball": "medecine_ball",
 };
+// "Box" (ajouté à la demande de Christine du 16/09/2026) n'a pas de
+// classification automatique : les seuls exercices du jeu de données dont le
+// nom contient "box" sont surtout des faux positifs ("boxing", "stepbox") -
+// contrairement à "banc" (voir plus haut), pas de règle fiable à détecter.
+// Reste uniquement un choix manuel possible depuis la fiche bibliothèque.
 function classifyMaterialFromEquipment(ex) {
   if ((ex.name || "").toLowerCase().includes("bench")) return "banc";
   return RAW_EQUIPMENT_TO_MATERIAL[(ex.equipment || "").toLowerCase()] || ex.type || "inconnu";
@@ -1015,6 +1050,28 @@ async function migrateLibraryMaterialTypes() {
         // de Christine - manual:false pour ne pas bloquer une reclassification
         // future si la règle automatique est encore améliorée.
         await applyMaterialTypeChange(ex, classified, { manual: false });
+      }
+    }
+  } finally {
+    localStorage.setItem(FLAG, "1");
+  }
+}
+
+// Migration ponctuelle (une seule fois par appareil) : traduit "dumbbell"/
+// "barbell" dans le nom des exercices déjà importés avant l'ajout de
+// frenchizeEquipmentWords - sans quoi seuls les exercices importés APRÈS
+// cette version afficheraient un nom en français.
+async function migrateFrenchizeExerciseNames() {
+  const FLAG = "carnetMuscuFrenchNamesMigrationV1";
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const all = await Db.getAllLibraryExercises();
+    for (const ex of all) {
+      const translated = frenchizeEquipmentWords(ex.name);
+      if (translated !== ex.name) {
+        ex.name = translated;
+        ex.updatedAt = Date.now();
+        await Db.updateLibraryExercise(ex);
       }
     }
   } finally {
@@ -1106,7 +1163,7 @@ async function renderLibrary(filterText) {
       </button>
       <div class="lib-item-thumb">${gifUrl ? `<img src="${gifUrl}" alt="" loading="lazy">` : ""}</div>
       <div class="lib-item-name">${escapeHtml(ex.name)}</div>
-      <div class="lib-item-sub">${escapeHtml(ex.equipment || typeLabel(ex.type))}${usage > 0 ? `<div class="lib-item-usage">utilisé ${usage}×</div>` : ""}</div>
+      <div class="lib-item-sub">${escapeHtml(typeLabel(ex.type))}${usage > 0 ? `<div class="lib-item-usage">utilisé ${usage}×</div>` : ""}</div>
     `;
     item.addEventListener("click", () => openLibraryDetail(ex));
     item.querySelector(".lib-fav-btn").addEventListener("click", async (e) => {
@@ -1198,7 +1255,9 @@ function renderLibDetailSecondaryChips(primaryKey, selectedKeys) {
     btn.className = "lib-cat-chip" + (selectedKeys.includes(m.key) ? " sel" : "");
     btn.textContent = m.label;
     btn.dataset.key = m.key;
-    btn.addEventListener("click", () => btn.classList.toggle("sel"));
+    // Le clic (bascule + enregistrement) est géré par délégation sur la
+    // rangée elle-même dans openLibraryDetail - pas ici, pour ne pas basculer
+    // deux fois la classe "sel" à chaque clic.
     row.appendChild(btn);
   }
 }
@@ -1226,15 +1285,7 @@ function openLibraryDetail(ex) {
   // 16/09/2026). Le select est peuplé une seule fois (voir dataset.built) -
   // seule sa valeur et les chips secondaires changent à chaque ouverture.
   const materialSelect = document.getElementById("lib-detail-material-primary");
-  if (!materialSelect.dataset.built) {
-    materialSelect.dataset.built = "1";
-    for (const m of MATERIAL_TYPES) {
-      const opt = document.createElement("option");
-      opt.value = m.key;
-      opt.textContent = m.label;
-      materialSelect.appendChild(opt);
-    }
-  }
+  populateMaterialSelect(materialSelect);
   const materialField = document.getElementById("lib-detail-material-field");
   const materialWarning = document.getElementById("lib-detail-material-warning");
   materialField.hidden = true;
@@ -1244,28 +1295,33 @@ function openLibraryDetail(ex) {
     materialWarning.hidden = true;
     materialField.hidden = false;
   };
-  materialSelect.onchange = () => {
-    const currentSecondary = [...document.querySelectorAll("#lib-detail-material-secondary .lib-cat-chip.sel")].map((b) => b.dataset.key);
+  // Enregistre directement à chaque choix (matériel principal ou secondaire)
+  // - à la demande de Christine du 16/09/2026 : avoir en plus un bouton
+  // "Enregistrer" séparé après avoir déjà choisi le matériel faisait
+  // "enregistrer deux fois". "Terminé" ne fait plus que refermer le panneau,
+  // tout est déjà enregistré au moment où on le touche.
+  const secondaryRow = document.getElementById("lib-detail-material-secondary");
+  materialSelect.onchange = async () => {
+    const currentSecondary = [...secondaryRow.querySelectorAll(".lib-cat-chip.sel")].map((b) => b.dataset.key);
     renderLibDetailSecondaryChips(materialSelect.value, currentSecondary);
-    // Avertit seulement si le matériel PRINCIPAL change vraiment - un simple
-    // ajustement des matériels secondaires ne touche jamais aux poids saisis.
-    materialWarning.hidden = materialSelect.value === (ex.type || "inconnu");
-  };
-  document.getElementById("lib-detail-material-cancel").onclick = () => {
-    materialField.hidden = true;
-  };
-  document.getElementById("lib-detail-material-save").onclick = async () => {
-    const newPrimary = materialSelect.value;
-    ex.secondaryTypes = [...document.querySelectorAll("#lib-detail-material-secondary .lib-cat-chip.sel")].map((b) => b.dataset.key);
-    if (newPrimary !== ex.type) {
-      await applyMaterialTypeChange(ex, newPrimary);
-    } else {
-      ex.updatedAt = Date.now();
-      await Db.updateLibraryExercise(ex);
-    }
-    materialField.hidden = true;
+    const changed = materialSelect.value !== ex.type;
+    materialWarning.hidden = !changed;
+    if (changed) await applyMaterialTypeChange(ex, materialSelect.value);
     document.getElementById("lib-detail-meta").textContent = libDetailMetaText(ex);
     await renderLibrary(document.getElementById("library-search").value);
+  };
+  secondaryRow.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".lib-cat-chip");
+    if (!btn || !secondaryRow.contains(btn)) return;
+    btn.classList.toggle("sel");
+    ex.secondaryTypes = [...secondaryRow.querySelectorAll(".lib-cat-chip.sel")].map((b) => b.dataset.key);
+    ex.updatedAt = Date.now();
+    await Db.updateLibraryExercise(ex);
+    document.getElementById("lib-detail-meta").textContent = libDetailMetaText(ex);
+    await renderLibrary(document.getElementById("library-search").value);
+  });
+  document.getElementById("lib-detail-material-save").onclick = () => {
+    materialField.hidden = true;
   };
   // Remplacer le gif par un lien (à la demande de Christine, après qu'une
   // photo ajoutée depuis son téléphone ait rendu une sauvegarde trop
@@ -1345,6 +1401,7 @@ let libNewGifFileDataUrl = null;
 
 function openLibraryAddModal() {
   document.getElementById("lib-new-name").value = "";
+  populateMaterialSelect(document.getElementById("lib-new-type"));
   document.getElementById("lib-new-type").value = "barre";
   document.getElementById("lib-new-gif-link").value = "";
   document.getElementById("lib-new-gif-file").value = "";
@@ -1596,6 +1653,12 @@ function openNewExerciseForm(name) {
   document.getElementById("confirm-add-exercise-verb").textContent = aiImportPickRowIndex !== null ? "Choisir" : swapTargetExerciseSessionId ? "Remplacer par" : "Ajouter";
   document.getElementById("new-exercise-reps-value").textContent = "10";
   document.getElementById("new-exercise-type-field").hidden = false;
+  const newExerciseTypeSelect = document.getElementById("new-exercise-type");
+  populateMaterialSelect(newExerciseTypeSelect);
+  // "Barre" par défaut (comme avant, quand c'était la première option codée
+  // en dur) - le select n'a plus d'ordre figé dans le HTML depuis qu'il est
+  // peuplé depuis MATERIAL_TYPES, qui commence par "Poids du corps".
+  newExerciseTypeSelect.value = "barre";
   // Remise à zéro du choix de gif à chaque nouvel exercice créé depuis la séance.
   newExerciseGifKind = "link";
   newExerciseGifFileDataUrl = null;
@@ -2457,7 +2520,7 @@ async function confirmAiImport() {
       // même principe que la création manuelle d'un exercice inconnu depuis
       // une séance. Modifiable ensuite (matériel, gif...) depuis la fiche
       // bibliothèque - voir applyMaterialTypeChange.
-      libEx = await Db.addLibraryExercise({ name: row.rawName, type: "inconnu", favorite: true });
+      libEx = await Db.addLibraryExercise({ name: frenchizeEquipmentWords(row.rawName), type: "inconnu", favorite: true });
       library.push(libEx);
       unmatchedCount++;
     }
@@ -2697,11 +2760,14 @@ async function init() {
   await Db.init();
   await migrateFavoritesForAlreadyUsedExercises();
   await migrateUsageCountsFromRealData();
-  seedPublicLibraryIfNeeded().then(() => migrateLibraryMaterialTypes()).then(() => {
-    // Une fois l'import (et la reclassification matériel) terminés, on
-    // rafraîchit la bibliothèque si elle est affichée (premier lancement
-    // avec connexion, ou mise à jour de l'appli sur un appareil qui avait
-    // déjà sa bibliothèque importée).
+  seedPublicLibraryIfNeeded()
+    .then(() => migrateLibraryMaterialTypes())
+    .then(() => migrateFrenchizeExerciseNames())
+    .then(() => {
+    // Une fois l'import (et la reclassification matériel / traduction des
+    // noms) terminés, on rafraîchit la bibliothèque si elle est affichée
+    // (premier lancement avec connexion, ou mise à jour de l'appli sur un
+    // appareil qui avait déjà sa bibliothèque importée).
     if (document.getElementById("view-library").classList.contains("active")) {
       renderLibrary(document.getElementById("library-search").value);
     }
