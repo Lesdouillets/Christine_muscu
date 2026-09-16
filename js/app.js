@@ -2357,11 +2357,16 @@ function aiImportRowGifHtml(row) {
     : `<div class="ai-import-row-noGif">pas de démonstration</div>`;
 }
 
+// Si l'IA n'a retrouvé aucune correspondance dans la bibliothèque (ou que
+// Christine n'a rien choisi à la main), on ne bloque plus la création de la
+// séance (à sa demande du 16/09/2026) : le nom lu sur la photo sera ajouté
+// tel quel comme un tout nouvel exercice de bibliothèque, modifiable ensuite
+// (matériel, gif...) depuis la fiche bibliothèque - voir confirmAiImport.
 function aiImportRowSelectedNameHtml(row) {
   const selected = row.candidates.find((c) => c.id === row.selectedId);
   return selected
     ? `${escapeHtml(selected.name)} <span class="ai-import-row-selected-type">(${escapeHtml(typeLabel(selected.type))})</span>`
-    : `<span class="ai-import-row-noselect">aucun exercice choisi</span>`;
+    : `<span class="ai-import-row-noselect">aucune correspondance - « ${escapeHtml(row.rawName)} » sera ajouté tel quel</span>`;
 }
 
 function renderAiImportReview() {
@@ -2430,11 +2435,6 @@ async function confirmAiImport() {
   aiImportDraft.date = document.getElementById("ai-import-date-input").value || todayIso();
   aiImportDraft.tours = parseInt(document.getElementById("ai-import-tours-input").value, 10) || 1;
   const included = aiImportDraft.rows.filter((r) => !r.excluded);
-  const missing = included.filter((r) => !r.selectedId);
-  if (missing.length > 0) {
-    alert(`Choisis un exercice de bibliothèque pour chaque ligne avant de créer la séance (ou coche « ne pas importer » pour l'ignorer) : ${missing.map((r) => `« ${r.rawName} »`).join(", ")}.`);
-    return;
-  }
   if (included.length === 0) {
     alert("Toutes les lignes sont exclues - il n'y aurait aucun exercice dans cette séance.");
     return;
@@ -2446,9 +2446,21 @@ async function confirmAiImport() {
     tours: aiImportDraft.tours,
   });
   let order = 0;
+  let unmatchedCount = 0;
   for (const row of included) {
-    const libEx = library.find((e) => e.id === row.selectedId);
-    if (!libEx) continue;
+    let libEx = row.selectedId ? library.find((e) => e.id === row.selectedId) : null;
+    if (!libEx) {
+      // Aucune correspondance retrouvée dans la bibliothèque (ou aucun choix
+      // fait à la main) - à la demande de Christine du 16/09/2026, on ne
+      // bloque plus la création de la séance : le nom lu sur la photo est
+      // ajouté tel quel comme un tout nouvel exercice de bibliothèque, sur le
+      // même principe que la création manuelle d'un exercice inconnu depuis
+      // une séance. Modifiable ensuite (matériel, gif...) depuis la fiche
+      // bibliothèque - voir applyMaterialTypeChange.
+      libEx = await Db.addLibraryExercise({ name: row.rawName, type: "inconnu", favorite: true });
+      library.push(libEx);
+      unmatchedCount++;
+    }
     await Db.addExerciseSession({
       sessionId: session.id,
       libraryExerciseId: libEx.id,
@@ -2463,7 +2475,10 @@ async function confirmAiImport() {
   document.getElementById("ai-import-modal").classList.remove("open");
   aiImportDraft = null;
   await renderJournal(document.getElementById("journal-search").value);
-  alert(`Séance créée avec ${included.length} exercice(s) - il ne te reste plus qu'à la faire.`);
+  const suffix = unmatchedCount > 0
+    ? ` (${unmatchedCount} ajouté${unmatchedCount > 1 ? "s" : ""} tel${unmatchedCount > 1 ? "s" : ""} quel${unmatchedCount > 1 ? "s" : ""}, sans correspondance trouvée - modifiable depuis la bibliothèque)`
+    : "";
+  alert(`Séance créée avec ${included.length} exercice(s)${suffix} - il ne te reste plus qu'à la faire.`);
 }
 
 // ---------- Synchronisation cloud (voir js/sync.js) ----------

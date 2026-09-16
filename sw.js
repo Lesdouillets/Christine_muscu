@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v47";
+const CACHE_NAME = "carnet-muscu-v48";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -139,6 +139,11 @@ const CACHE_NAME = "carnet-muscu-v47";
 // jeu de données déjà importés avant cette version sont reclassés une seule
 // fois au démarrage (câble/machine/kettlebell/banc n'existaient pas comme
 // matériel principal avant)
+// (v48 : import d'une séance depuis une photo - quand l'IA ne retrouve
+// aucune correspondance dans la bibliothèque pour un exercice lu sur la
+// photo, la création de la séance n'est plus bloquée (demande de Christine
+// du 16/09/2026) : le nom détecté est gardé tel quel comme un tout nouvel
+// exercice de bibliothèque, modifiable ensuite depuis sa fiche)
 const APP_SHELL = [
   "./",
   "./index.html",
