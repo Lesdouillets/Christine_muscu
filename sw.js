@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v49";
+const CACHE_NAME = "carnet-muscu-v50";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -152,6 +152,11 @@ const CACHE_NAME = "carnet-muscu-v49";
 // matériels possibles. 3) les mots anglais "dumbbell"/"barbell" restés dans
 // le nom de beaucoup d'exercices du jeu de données sont traduits en
 // "haltère"/"barre")
+// (v50 : suite de la traduction des noms d'exercices, à la demande de
+// Christine du 16/09/2026 - traduit aussi "arm"/"leg"/"standing"/
+// "bodyweight" en "bras"/"jambe"/"debout"/"poids du corps". La quasi-
+// totalité des ~1300 noms du jeu de données reste en anglais (curl, press,
+// cable, row, squat, bench...) - seuls les mots traduits jusqu'ici le sont)
 const APP_SHELL = [
   "./",
   "./index.html",

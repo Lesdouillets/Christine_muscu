@@ -31,14 +31,30 @@ function goTo(viewName) {
 }
 
 // Traduit les mots anglais restés dans le nom des exercices du jeu de
-// données (à la demande de Christine du 16/09/2026 : "mets en français les
-// mots barbell et dumbbell") - le nom lui-même reste modifiable ensuite au
-// cas par cas depuis la fiche bibliothèque (bouton renommer), donc pas grave
-// si la traduction mot à mot est parfois un peu littérale.
+// données (à la demande de Christine du 16/09/2026, mot par mot au fur et à
+// mesure - "barbell"/"dumbbell" d'abord, puis "arm"/"leg"/"standing"/
+// "bodyweight") - le nom lui-même reste modifiable ensuite au cas par cas
+// depuis la fiche bibliothèque (bouton renommer), donc pas grave si la
+// traduction mot à mot est parfois un peu littérale. La quasi-totalité des
+// noms du jeu de données est en anglais (voir le reste du vocabulaire :
+// curl, press, cable, row, squat, bench...) - cette liste ne couvre que les
+// mots traduits jusqu'ici, pas l'ensemble.
+const FRENCH_WORD_REPLACEMENTS = [
+  [/\bdumbbell\b/gi, "haltère"],
+  [/\bbarbell\b/gi, "barre"],
+  [/\barms\b/gi, "bras"],
+  [/\barm\b/gi, "bras"],
+  [/\blegs\b/gi, "jambes"],
+  [/\bleg\b/gi, "jambe"],
+  [/\bstanding\b/gi, "debout"],
+  [/\bbodyweight\b/gi, "poids du corps"],
+];
 function frenchizeEquipmentWords(name) {
-  return (name || "")
-    .replace(/\bdumbbell\b/gi, "haltère")
-    .replace(/\bbarbell\b/gi, "barre");
+  let result = name || "";
+  for (const [pattern, replacement] of FRENCH_WORD_REPLACEMENTS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
 }
 
 // ---------- Import de la bibliothèque publique (phase 2) ----------
@@ -1062,7 +1078,10 @@ async function migrateLibraryMaterialTypes() {
 // frenchizeEquipmentWords - sans quoi seuls les exercices importés APRÈS
 // cette version afficheraient un nom en français.
 async function migrateFrenchizeExerciseNames() {
-  const FLAG = "carnetMuscuFrenchNamesMigrationV1";
+  // V2 (16/09/2026) : Christine a demandé la traduction d'autres mots
+  // (arm/leg/standing/bodyweight) après la V1 - un nouveau numéro de version
+  // pour que ça se rejoue même sur un appareil où la V1 avait déjà tourné.
+  const FLAG = "carnetMuscuFrenchNamesMigrationV2";
   if (localStorage.getItem(FLAG)) return;
   try {
     const all = await Db.getAllLibraryExercises();
