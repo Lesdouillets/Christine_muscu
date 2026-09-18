@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v50";
+const CACHE_NAME = "carnet-muscu-v51";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -157,6 +157,16 @@ const CACHE_NAME = "carnet-muscu-v50";
 // "bodyweight" en "bras"/"jambe"/"debout"/"poids du corps". La quasi-
 // totalité des ~1300 noms du jeu de données reste en anglais (curl, press,
 // cable, row, squat, bench...) - seuls les mots traduits jusqu'ici le sont)
+// (v51 : deux corrections remontées par Christine le 18/09/2026 -
+// 1) le champ de poids "libre" (haltères/barre) n'acceptait pas la virgule
+// française ("0,5") : un clavier français tape une virgule que le champ,
+// codé en <input type="number">, ne reconnaissait pas comme un nombre
+// décimal valide. Passe en champ texte avec clavier décimal, qui accepte
+// aussi bien "0,5" que "0.5". 2) la ligne "Dernière fois" d'un exercice
+// n'affichait que le poids/ressenti du 1er tour de la séance précédente,
+// jamais un tour suivant - le ressenti pouvait donc sembler manquant alors
+// qu'il avait bien été noté. Reprend maintenant le dernier tour renseigné,
+// comme pour l'onglet Progrès)
 const APP_SHELL = [
   "./",
   "./index.html",

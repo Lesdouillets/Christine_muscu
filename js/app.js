@@ -558,8 +558,21 @@ async function buildExerciseCard(session, ex, last) {
   // historique + suggestion (section 6 de la spec : "noté trop léger → essaie
   // 2×15 aujourd'hui")
   if (last) {
-    const lastRoundWeight = roundWeight(last, 0);
-    const lastRoundFeeling = roundFeeling(last, 0);
+    // Le tour le plus informatif de la dernière séance : le DERNIER tour où
+    // un poids a été renseigné (même logique que Progrès - "le poids de la
+    // dernière répète de chaque séance", demande de Christine du
+    // 14/09/2026), et non plus systématiquement le 1er tour. Sans quoi le
+    // ressenti affiché ici pouvait être vide alors qu'elle l'avait bien noté
+    // sur un tour suivant (remonté le 18/09/2026 : "sur la dernière fois
+    // rajoute mon ressenti").
+    const lastRounds = last.rounds || [];
+    let lastRecorded = null;
+    for (const round of lastRounds) {
+      if (round.weight) lastRecorded = round;
+    }
+    if (!lastRecorded) lastRecorded = lastRounds[lastRounds.length - 1] || null;
+    const lastRoundWeight = lastRecorded ? lastRecorded.weight : null;
+    const lastRoundFeeling = lastRecorded ? lastRecorded.feeling : null;
     const lastWeightTxt = weightLabel(ex.type, lastRoundWeight);
     const lastFeeling = feelingLabel(lastRoundFeeling);
     const suggestion = suggestNextWeight(ex.type, lastRoundWeight, lastRoundFeeling);
@@ -769,7 +782,7 @@ function buildRoundFull(session, ex, index) {
           <button data-val="20" class="${w.added === 20 ? "sel" : ""}">2×20</button>
           <button data-val="libre" class="libre-btn">libre</button>
         </div>
-        <div class="libre-row"><span>2 ×</span><input type="number" step="0.5" placeholder="ex. 12,5"><span>kg</span></div>
+        <div class="libre-row"><span>2 ×</span><input type="text" inputmode="decimal" placeholder="ex. 12,5"><span>kg</span></div>
         <div class="weight-total"></div>
       `;
     } else {
@@ -782,7 +795,7 @@ function buildRoundFull(session, ex, index) {
           <button data-val="20" class="${w.perHand === 20 ? "sel" : ""}">20 kg</button>
           <button data-val="libre" class="libre-btn">libre</button>
         </div>
-        <div class="libre-row"><span>par main :</span><input type="number" step="0.5" placeholder="ex. 17,5"><span>kg</span></div>
+        <div class="libre-row"><span>par main :</span><input type="text" inputmode="decimal" placeholder="ex. 17,5"><span>kg</span></div>
       `;
     }
     wireWeightBlock(wb, ex, index, w);
@@ -833,7 +846,12 @@ function wireWeightBlock(wb, ex, index, currentWeight) {
       const seg = input.closest(".weight-block").querySelector(".seg[data-role='added'], .seg[data-role='perHand']");
       const role = seg.dataset.role;
       const w = { ...(roundWeight(ex, index) || (ex.type === "barre" ? { bar: 15, added: 5 } : { perHand: 5 })) };
-      w[role] = parseFloat(input.value) || 0;
+      // Le champ est en texte libre (voir plus haut) plutôt qu'un <input
+      // type="number"> - un clavier français tape "0,5" avec une virgule, que
+      // parseFloat() ne reconnaît pas comme décimale (il l'aurait lu comme
+      // juste "0"). À la demande de Christine du 18/09/2026 : elle ne
+      // parvenait pas à saisir un demi-kilo en poids libre.
+      w[role] = parseFloat(String(input.value).replace(",", ".")) || 0;
       await saveRound(ex, index, { weight: w });
       updateTotal(w);
       await refreshCompactRoundsFor(ex.id);
@@ -882,7 +900,8 @@ function buildRoundCompact(session, ex, index) {
       const current = roundWeight(ex, index) || lastKnownWeight(ex, index);
       const promptVal = prompt("Nouveau poids total (kg) pour ce tour :", current ? (ex.type === "barre" ? current.bar + current.added * 2 : current.perHand) : "");
       if (promptVal === null) return;
-      const val = parseFloat(promptVal);
+      // Même correction de virgule française que le champ "libre" ci-dessus.
+      const val = parseFloat(String(promptVal).replace(",", "."));
       if (isNaN(val)) return;
       let w2;
       if (ex.type === "barre") {
