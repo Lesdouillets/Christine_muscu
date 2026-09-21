@@ -121,6 +121,15 @@ button{font-family:inherit;}
 .lib-detail-name-row h3,.lib-detail-name-row h2{flex:1;min-width:0;}
 .lib-detail-rename-btn{flex-shrink:0;background:var(--surface-2);border:1px solid var(--line);border-radius:50%;width:30px;height:30px;color:var(--muted);cursor:pointer;}
 .lib-detail-rename-actions{display:flex;gap:8px;margin-top:6px;}
+/* Cette classe est réutilisée sur #ai-import-review-actions (mêmes boutons
+   "Créer la séance"/"Annuler" alignés), togglé en [hidden] par
+   setAiImportModalState() - sans cet override, [hidden] restait sans effet
+   pour la même raison qu'en ligne 71-76 ci-dessus (règle "display" posée sur
+   la classe, sans son pendant [hidden]) : les boutons "Créer la séance" /
+   "Annuler" de l'import photo restaient visibles et cliquables même pendant
+   l'état d'erreur, alors qu'aucun brouillon n'existe encore à ce moment
+   (aiImportDraft est null) - un clic dessus aurait fait planter l'import. */
+.lib-detail-rename-actions[hidden]{display:none;}
 .lib-detail-rename-actions .primary-btn,.lib-detail-rename-actions .ghost-btn{flex:1;padding:9px;}
 /* Import de séance depuis une photo (lecture IA) - voir js/ai.js et
    renderAiImportReview dans js/app.js. Une "carte" par exercice détecté,

@@ -78,6 +78,51 @@ const AI_IMPORT_SCHEMA = {
   required: ["tours", "exercises"],
 };
 
+// Christine a signalé (21/09/2026) des erreurs "de temps en temps" à
+// l'import photo. Gemini répond occasionnellement une erreur transitoire
+// (surcharge - 429/503, ou un 500 ponctuel côté Google) qui se résorbe
+// d'elle-même en général en resollicitant l'API quelques secondes après.
+// On retente donc automatiquement (jusqu'à 2 fois, avec un court délai
+// croissant) avant de renvoyer une erreur à l'appli - Christine n'a plus à
+// reprendre la photo elle-même pour ce cas très courant. Une erreur non
+// transitoire (mauvaise requête, clé invalide...) échoue tout de suite,
+// sans attendre inutilement.
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callGeminiWithRetry(url, options, maxAttempts = 3) {
+  let lastRes = null;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === maxAttempts) {
+        return res;
+      }
+      lastRes = res;
+      logger.warn("Appel Gemini transitoire en échec, nouvelle tentative", {
+        attempt,
+        status: res.status,
+      });
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts) throw err;
+      logger.warn("Appel Gemini en échec (réseau), nouvelle tentative", {
+        attempt,
+        message: err.message,
+      });
+    }
+    await sleep(attempt * 800); // 800ms puis 1600ms avant les tentatives suivantes
+  }
+  // Ne devrait pas être atteint (la boucle renvoie ou lève avant), mais par
+  // sécurité on renvoie la dernière réponse/erreur connue.
+  if (lastRes) return lastRes;
+  throw lastErr;
+}
+
 function setCors(req, res) {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.has(origin)) {
@@ -112,7 +157,7 @@ exports.analyzeSessionPhoto = onRequest(
       // Un en-tête "x-goog-api-key" est la façon attendue de l'envoyer pour
       // ce nouveau format - problème connu et documenté par d'autres
       // utilisateurs de Google AI Studio à la même période.
-      const geminiRes = await fetch(
+      const geminiRes = await callGeminiWithRetry(
         `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
         {
           method: "POST",
@@ -138,8 +183,14 @@ exports.analyzeSessionPhoto = onRequest(
       );
       if (!geminiRes.ok) {
         const errBody = await geminiRes.json().catch(() => null);
-        logger.error("Échec de l'appel à Gemini", { status: geminiRes.status, errBody });
-        res.status(502).json({ error: "Le service de lecture de photo a échoué." });
+        logger.error("Échec de l'appel à Gemini (après nouvelles tentatives)", {
+          status: geminiRes.status,
+          errBody,
+        });
+        const message = RETRYABLE_STATUS.has(geminiRes.status)
+          ? "Le service de lecture de photo est surchargé pour le moment - réessaie dans une minute."
+          : "Le service de lecture de photo a échoué.";
+        res.status(502).json({ error: message });
         return;
       }
       const body = await geminiRes.json();

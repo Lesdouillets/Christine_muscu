@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v52";
+const CACHE_NAME = "carnet-muscu-v53";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -177,6 +177,22 @@ const CACHE_NAME = "carnet-muscu-v52";
 // que le retour ne faisait plus rien. Le geste de retour ferme maintenant
 // d'abord une fenêtre ouverte s'il y en a une, et ne revient au journal
 // que si aucune fenêtre n'est ouverte)
+// (v53 : deux corrections liées à l'import photo par IA, suite au signalement
+// de Christine le 21/09/2026 "j'ai des erreurs de temps en temps lors de
+// l'upload d'une image" - 1) la fonction serveur (functions/index.js)
+// retente maintenant automatiquement l'appel à Gemini jusqu'à 2 fois en cas
+// d'erreur transitoire (surcharge 429/503, erreur 500/502/504 ponctuelle)
+// avant d'abandonner, ce qui devrait résorber la plupart de ces échecs
+// intermittents sans que Christine ait à reprendre la photo ; le message
+// d'erreur distingue maintenant ce cas ("service surchargé, réessaie dans
+// une minute") d'une vraie panne. 2) en marge de cette investigation,
+// repéré et corrigé un bug d'affichage : les boutons "Créer la séance" /
+// "Annuler" de cette même fenêtre d'import restaient visibles ET cliquables
+// même pendant l'affichage d'un message d'erreur (un [hidden] sans son
+// override CSS - même famille de bug que celui déjà corrigé pour le
+// formulaire "nouvel exercice", voir commentaire css/app.css) : un clic
+// dessus à ce moment-là aurait fait planter l'import puisqu'aucun brouillon
+// n'existe encore)
 const APP_SHELL = [
   "./",
   "./index.html",
