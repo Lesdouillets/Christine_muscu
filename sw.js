@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v53";
+const CACHE_NAME = "carnet-muscu-v54";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -193,6 +193,20 @@ const CACHE_NAME = "carnet-muscu-v53";
 // formulaire "nouvel exercice", voir commentaire css/app.css) : un clic
 // dessus à ce moment-là aurait fait planter l'import puisqu'aucun brouillon
 // n'existe encore)
+// (v54 : corrige un plantage remonté par Christine le 21/09/2026 en pleine
+// investigation d'un écart "13 séances sur le web / 14 sur l'appli" - le
+// vrai souci n'était PAS la synchro (elle marchait) mais un plantage qui
+// empêchait le journal de se réafficher après une fusion : quand un tour
+// est rempli sans que les tours précédents le soient (Christine peut ouvrir
+// n'importe quel tour dans l'accordéon, pas forcément dans l'ordre),
+// `ex.rounds[index] = {...}` laisse des "trous" (valeurs undefined, pas de
+// vides normaux) aux index sautés. Trois endroits lisaient les tours un par
+// un avec `for...of` (qui visite CES trous, contrairement à .some()/
+// .forEach() qui les ignorent) sans vérifier qu'ils existaient : le calcul
+// du record personnel, celui de "Dernière fois" (ajouté en v51), et celui
+// du graphique Progrès - le premier plantait dès qu'un journal contenant
+// une telle séance se réaffichait, ce qui explique le message d'erreur
+// obtenu en forçant une récupération cloud juste après)
 const APP_SHELL = [
   "./",
   "./index.html",

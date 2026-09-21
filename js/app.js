@@ -304,6 +304,18 @@ async function computeRecordWeightLabel(sessions) {
     for (const ex of exs) {
       if (ex.type !== "barre" && ex.type !== "halteres") continue;
       for (const round of ex.rounds || []) {
+        // `ex.rounds[index] = {...}` (voir plus bas) écrit directement à un
+        // index donné : si un tour plus loin est rempli avant un tour
+        // antérieur (Christine peut ouvrir n'importe quel tour dans
+        // l'accordéon, pas forcément dans l'ordre), les index sautés
+        // restent des "trous" dans le tableau - un for...of les visite quand
+        // même et donne `undefined`, contrairement à .some()/.forEach() qui
+        // les ignorent. Sans ce garde-fou, `round.weight` plantait avec
+        // "Cannot read properties of undefined (reading 'weight')" dès
+        // qu'une séance comme ça était rendue (bug remonté par Christine le
+        // 21/09/2026, au moment d'une synchro qui ramenait justement une
+        // telle séance).
+        if (!round) continue;
         const w = round.weight;
         if (!w) continue;
         const total = ex.type === "barre" ? w.bar + w.added * 2 : w.perHand * 2;
@@ -568,7 +580,10 @@ async function buildExerciseCard(session, ex, last) {
     const lastRounds = last.rounds || [];
     let lastRecorded = null;
     for (const round of lastRounds) {
-      if (round.weight) lastRecorded = round;
+      // Voir le commentaire équivalent dans computeRecordWeightLabel : un
+      // tour rempli hors ordre laisse des "trous" (undefined) dans le
+      // tableau, qu'un for...of visite quand même.
+      if (round && round.weight) lastRecorded = round;
     }
     if (!lastRecorded) lastRecorded = lastRounds[lastRounds.length - 1] || null;
     const lastRoundWeight = lastRecorded ? lastRecorded.weight : null;
@@ -1925,7 +1940,10 @@ async function buildProgressSeries(libId) {
     // tour qui doit apparaître dans le graphique de progression.
     let last = null;
     for (const round of ex.rounds || []) {
-      if (!round.weight) continue;
+      // Voir le commentaire équivalent dans computeRecordWeightLabel : un
+      // tour rempli hors ordre laisse des "trous" (undefined) dans le
+      // tableau, qu'un for...of visite quand même.
+      if (!round || !round.weight) continue;
       const total = ex.type === "barre"
         ? round.weight.bar + round.weight.added * 2
         : round.weight.perHand * 2;
