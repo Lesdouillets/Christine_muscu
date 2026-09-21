@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v54";
+const CACHE_NAME = "carnet-muscu-v55";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -207,6 +207,15 @@ const CACHE_NAME = "carnet-muscu-v54";
 // du graphique Progrès - le premier plantait dès qu'un journal contenant
 // une telle séance se réaffichait, ce qui explique le message d'erreur
 // obtenu en forçant une récupération cloud juste après)
+// (v55 : la v54 protégeait la LECTURE de ces "trous" mais pas leur cause :
+// une fois le plantage précédent corrigé, l'envoi vers le cloud échouait à
+// son tour avec "Function DocumentReference.set() called with invalid
+// data. Unsupported field value: undefined" - Firestore refuse tout net un
+// vrai trou de tableau. saveRound() comble maintenant les tours sautés
+// avec `null` (une valeur normale, pas un trou) au moment même où on
+// remplit un tour hors ordre, et une migration corrige les séances déjà
+// enregistrées avec un trou avant ce correctif, sur cet appareil comme
+// celles reçues par synchro d'un appareil resté sur une ancienne version)
 const APP_SHELL = [
   "./",
   "./index.html",

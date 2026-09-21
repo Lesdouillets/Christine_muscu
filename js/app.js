@@ -740,6 +740,19 @@ function lastKnownWeight(ex, beforeIndex) {
 
 async function saveRound(ex, index, patch) {
   ex.rounds = ex.rounds || [];
+  // Comble les tours sautés avec `null` plutôt que de laisser de vrais
+  // "trous" (valeurs absentes, pas juste vides) dans le tableau : Christine
+  // peut ouvrir n'importe quel tour dans l'accordéon, pas forcément dans
+  // l'ordre, et `ex.rounds[index] = ...` sans avoir jamais touché les index
+  // avant crée un trou à chacun d'eux. `null` est une valeur normale que le
+  // reste du code (roundWeight/roundFeeling, et les gardes `if (!round)
+  // continue` ajoutées en v54) traite déjà comme "tour pas encore rempli" -
+  // un vrai trou, lui, fait planter Firestore à l'envoi vers le cloud
+  // ("Unsupported field value: undefined", découvert le 21/09/2026) et
+  // faisait planter certains calculs locaux avant la v54.
+  for (let i = 0; i < index; i++) {
+    if (ex.rounds[i] === undefined) ex.rounds[i] = null;
+  }
   ex.rounds[index] = { ...(ex.rounds[index] || { round: index + 1 }), ...patch };
   await Db.updateExerciseSession(ex);
 }
@@ -2800,6 +2813,36 @@ async function migrateUsageCountsFromRealData() {
   localStorage.setItem(FLAG, "1");
 }
 
+// Comble les "trous" déjà présents dans des tableaux `rounds` existants
+// (voir le correctif de saveRound ci-dessus, et le commentaire v54 sur
+// `ex.rounds[index] = ...`) : cette migration corrige les séances DÉJÀ
+// enregistrées avant ce correctif, sur cet appareil comme sur les données
+// reçues par synchro d'un autre appareil resté sur une ancienne version.
+// Sans elle, une séance déjà "trouée" continuerait de faire échouer son
+// envoi vers Firestore ("Unsupported field value: undefined", découvert le
+// 21/09/2026) même après la mise à jour de l'appli.
+async function migrateFillRoundHoles() {
+  const FLAG = "carnet-muscu-migrated-round-holes-v1";
+  if (localStorage.getItem(FLAG)) return;
+  try {
+    const allExerciseSessions = await Db.getAllExerciseSessions();
+    for (const es of allExerciseSessions) {
+      if (!Array.isArray(es.rounds) || es.rounds.length === 0) continue;
+      let hadHole = false;
+      for (let i = 0; i < es.rounds.length; i++) {
+        if (es.rounds[i] === undefined) {
+          es.rounds[i] = null;
+          hadHole = true;
+        }
+      }
+      if (hadHole) await Db.updateExerciseSession(es);
+    }
+  } catch (err) {
+    console.error("[carnet-muscu] échec de la migration des trous de tours :", err);
+  }
+  localStorage.setItem(FLAG, "1");
+}
+
 // Le geste de retour (balayage, ou bouton retour Android) déclenche un
 // "popstate" - on ignore quel écran était visé (l'historique interne, voir
 // goTo, n'a pas besoin d'être un vrai fil d'écrans précédents) et on
@@ -2836,6 +2879,7 @@ async function init() {
   await Db.init();
   await migrateFavoritesForAlreadyUsedExercises();
   await migrateUsageCountsFromRealData();
+  await migrateFillRoundHoles();
   seedPublicLibraryIfNeeded()
     .then(() => migrateLibraryMaterialTypes())
     .then(() => migrateFrenchizeExerciseNames())
