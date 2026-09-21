@@ -2789,7 +2789,27 @@ async function migrateUsageCountsFromRealData() {
 // goTo() repousse aussitôt une nouvelle entrée d'historique, pour qu'un
 // balayage suivant refasse la même chose plutôt que de finir par vraiment
 // fermer l'appli une fois l'historique "épuisé".
+//
+// Christine a signalé le 21/09/2026 que "le retour arrière ne fonctionne
+// plus" : en fait le changement d'écran ci-dessus se produisait toujours,
+// mais les fenêtres (fiche d'exercice, ajout, import IA, graphique...)
+// s'ouvrent/se ferment juste avec une classe CSS "open" sur leur
+// modal-backdrop, sans passer par goTo() - popstate ne les fermait donc
+// jamais. Un balayage retour pendant qu'une fenêtre est ouverte semblait
+// alors ne rien faire, alors que le journal se rouvrait bien en dessous,
+// invisible sous la fenêtre restée ouverte. On ferme donc d'abord une
+// fenêtre ouverte s'il y en a une (sans changer d'écran), et seulement si
+// aucune n'est ouverte on revient au journal comme avant.
 window.addEventListener("popstate", async () => {
+  const openModal = document.querySelector(".modal-backdrop.open");
+  if (openModal) {
+    openModal.classList.remove("open");
+    if (openModal.id === "ai-import-modal") aiImportDraft = null;
+    // Réempile une entrée pour que le balayage suivant referme la fenêtre
+    // suivante (ou revienne au journal) au lieu de fermer l'appli.
+    history.pushState({ view: "journal" }, "", location.pathname);
+    return;
+  }
   await renderJournal();
   goTo("journal");
 });

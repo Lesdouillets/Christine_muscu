@@ -9,7 +9,7 @@
 // figée sur une très vieille version malgré plusieurs mises à jour
 // poussées entre-temps). Ne pas revenir à "cache d'abord" pour l'app
 // shell sans revoir ce commentaire.
-const CACHE_NAME = "carnet-muscu-v51";
+const CACHE_NAME = "carnet-muscu-v52";
 // (v18 regroupe : renommer une séance + graphique "séances par mois")
 // (v19 : corrige les compteurs "utilisé X×" faussés dans la bibliothèque)
 // (v20 : synchro robuste - horodatage systématique + fusion par version la
@@ -167,6 +167,16 @@ const CACHE_NAME = "carnet-muscu-v51";
 // jamais un tour suivant - le ressenti pouvait donc sembler manquant alors
 // qu'il avait bien été noté. Reprend maintenant le dernier tour renseigné,
 // comme pour l'onglet Progrès)
+// (v52 : corrige "le retour arrière ne fonctionne plus" remonté par
+// Christine le 21/09/2026 - le geste de retour changeait bien d'écran en
+// coulisse (voir goTo/popstate plus haut, inchangés depuis la v44), mais
+// les fenêtres ouvertes par-dessus (fiche d'exercice, ajout, import IA,
+// graphique...) ne se ferment que via une classe CSS "open" et n'étaient
+// jamais fermées par ce geste : le changement d'écran se faisait donc
+// invisible, masqué par la fenêtre restée ouverte, donnant l'impression
+// que le retour ne faisait plus rien. Le geste de retour ferme maintenant
+// d'abord une fenêtre ouverte s'il y en a une, et ne revient au journal
+// que si aucune fenêtre n'est ouverte)
 const APP_SHELL = [
   "./",
   "./index.html",
